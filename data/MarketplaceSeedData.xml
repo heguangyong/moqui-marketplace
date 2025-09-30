@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<entity-facade-xml type="seed">
+
+    <!-- ==================== 品类标签初始数据 ==================== -->
+
+    <!-- 一级品类 -->
+    <marketplace.tag.Tag tagId="CAT_VEGETABLE" tagType="CATEGORY" tagName="蔬菜" tagNameEn="Vegetable" sortOrder="10" isActive="Y"/>
+    <marketplace.tag.Tag tagId="CAT_MEAT" tagType="CATEGORY" tagName="肉类" tagNameEn="Meat" sortOrder="20" isActive="Y"/>
+    <marketplace.tag.Tag tagId="CAT_FRUIT" tagType="CATEGORY" tagName="水果" tagNameEn="Fruit" sortOrder="30" isActive="Y"/>
+    <marketplace.tag.Tag tagId="CAT_SEAFOOD" tagType="CATEGORY" tagName="海鲜" tagNameEn="Seafood" sortOrder="40" isActive="Y"/>
+    <marketplace.tag.Tag tagId="CAT_GRAIN" tagType="CATEGORY" tagName="粮油" tagNameEn="Grain" sortOrder="50" isActive="Y"/>
+
+    <!-- 蔬菜子品类 -->
+    <marketplace.tag.Tag tagId="CAT_VEG_LEAF" tagType="CATEGORY" tagName="叶菜类" tagNameEn="Leafy Vegetables"
+                        parentTagId="CAT_VEGETABLE" sortOrder="11" isActive="Y"
+                        description="菠菜、生菜、小白菜、油菜等"/>
+    <marketplace.tag.Tag tagId="CAT_VEG_ROOT" tagType="CATEGORY" tagName="根茎类" tagNameEn="Root Vegetables"
+                        parentTagId="CAT_VEGETABLE" sortOrder="12" isActive="Y"
+                        description="萝卜、土豆、红薯、山药等"/>
+    <marketplace.tag.Tag tagId="CAT_VEG_FRUIT" tagType="CATEGORY" tagName="瓜果类" tagNameEn="Fruit Vegetables"
+                        parentTagId="CAT_VEGETABLE" sortOrder="13" isActive="Y"
+                        description="番茄、黄瓜、茄子、辣椒等"/>
+    <marketplace.tag.Tag tagId="CAT_VEG_BEAN" tagType="CATEGORY" tagName="豆类" tagNameEn="Beans"
+                        parentTagId="CAT_VEGETABLE" sortOrder="14" isActive="Y"
+                        description="豆角、四季豆、豌豆等"/>
+
+    <!-- 肉类子品类 -->
+    <marketplace.tag.Tag tagId="CAT_MEAT_PORK" tagType="CATEGORY" tagName="猪肉" tagNameEn="Pork"
+                        parentTagId="CAT_MEAT" sortOrder="21" isActive="Y"/>
+    <marketplace.tag.Tag tagId="CAT_MEAT_BEEF" tagType="CATEGORY" tagName="牛肉" tagNameEn="Beef"
+                        parentTagId="CAT_MEAT" sortOrder="22" isActive="Y"/>
+    <marketplace.tag.Tag tagId="CAT_MEAT_MUTTON" tagType="CATEGORY" tagName="羊肉" tagNameEn="Mutton"
+                        parentTagId="CAT_MEAT" sortOrder="23" isActive="Y"/>
+    <marketplace.tag.Tag tagId="CAT_MEAT_POULTRY" tagType="CATEGORY" tagName="禽类" tagNameEn="Poultry"
+                        parentTagId="CAT_MEAT" sortOrder="24" isActive="Y"
+                        description="鸡肉、鸭肉、鹅肉等"/>
+
+    <!-- 水果子品类 -->
+    <marketplace.tag.Tag tagId="CAT_FRUIT_SEASONAL" tagType="CATEGORY" tagName="应季水果" tagNameEn="Seasonal Fruit"
+                        parentTagId="CAT_FRUIT" sortOrder="31" isActive="Y"/>
+    <marketplace.tag.Tag tagId="CAT_FRUIT_TROPICAL" tagType="CATEGORY" tagName="热带水果" tagNameEn="Tropical Fruit"
+                        parentTagId="CAT_FRUIT" sortOrder="32" isActive="Y"/>
+    <marketplace.tag.Tag tagId="CAT_FRUIT_LOCAL" tagType="CATEGORY" tagName="本地水果" tagNameEn="Local Fruit"
+                        parentTagId="CAT_FRUIT" sortOrder="33" isActive="Y"/>
+
+    <!-- ==================== 属性标签 ==================== -->
+
+    <marketplace.tag.Tag tagId="ATTR_ORGANIC" tagType="ATTRIBUTE" tagName="有机" tagNameEn="Organic" sortOrder="100" isActive="Y"/>
+    <marketplace.tag.Tag tagId="ATTR_GREEN" tagType="ATTRIBUTE" tagName="绿色" tagNameEn="Green" sortOrder="101" isActive="Y"/>
+    <marketplace.tag.Tag tagId="ATTR_FRESH" tagType="ATTRIBUTE" tagName="新鲜" tagNameEn="Fresh" sortOrder="102" isActive="Y"/>
+    <marketplace.tag.Tag tagId="ATTR_FROZEN" tagType="ATTRIBUTE" tagName="冷冻" tagNameEn="Frozen" sortOrder="103" isActive="Y"/>
+    <marketplace.tag.Tag tagId="ATTR_WHOLESALE" tagType="ATTRIBUTE" tagName="批发" tagNameEn="Wholesale" sortOrder="110" isActive="Y"/>
+    <marketplace.tag.Tag tagId="ATTR_RETAIL" tagType="ATTRIBUTE" tagName="零售" tagNameEn="Retail" sortOrder="111" isActive="Y"/>
+
+    <!-- ==================== 时效标签 ==================== -->
+
+    <marketplace.tag.Tag tagId="TIME_TODAY" tagType="TIMING" tagName="当日" tagNameEn="Today" sortOrder="200" isActive="Y"/>
+    <marketplace.tag.Tag tagId="TIME_TOMORROW" tagType="TIMING" tagName="次日" tagNameEn="Tomorrow" sortOrder="201" isActive="Y"/>
+    <marketplace.tag.Tag tagId="TIME_PREORDER" tagType="TIMING" tagName="预订" tagNameEn="Pre-order" sortOrder="202" isActive="Y"/>
+    <marketplace.tag.Tag tagId="TIME_LONGTERM" tagType="TIMING" tagName="长期供应" tagNameEn="Long-term" sortOrder="203" isActive="Y"/>
+
+    <!-- ==================== 配送标签 ==================== -->
+
+    <marketplace.tag.Tag tagId="DELIVERY_YES" tagType="ATTRIBUTE" tagName="可配送" tagNameEn="Delivery Available" sortOrder="300" isActive="Y"/>
+    <marketplace.tag.Tag tagId="DELIVERY_PICKUP" tagType="ATTRIBUTE" tagName="自提" tagNameEn="Pickup Only" sortOrder="301" isActive="Y"/>
+    <marketplace.tag.Tag tagId="DELIVERY_BOTH" tagType="ATTRIBUTE" tagName="配送+自提" tagNameEn="Both" sortOrder="302" isActive="Y"/>
+
+</entity-facade-xml>

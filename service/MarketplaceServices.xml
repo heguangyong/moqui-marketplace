@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <!-- ==================== 供需发布服务 ==================== -->
+
+    <service verb="create" noun="Listing">
+        <description>创建供应或需求信息</description>
+        <in-parameters>
+            <parameter name="listingType" required="true">
+                <description>SUPPLY或DEMAND</description>
+            </parameter>
+            <parameter name="publisherId" required="true"/>
+            <parameter name="publisherType" required="true"/>
+            <parameter name="title" required="true"/>
+            <parameter name="description"/>
+            <parameter name="category" required="true"/>
+            <parameter name="subCategory"/>
+            <parameter name="quantity" type="BigDecimal"/>
+            <parameter name="quantityUnit" default-value="斤"/>
+            <parameter name="priceMin" type="BigDecimal"/>
+            <parameter name="priceMax" type="BigDecimal"/>
+            <parameter name="locationDesc"/>
+            <parameter name="geoPointId"/>
+            <parameter name="deliveryRange" type="BigDecimal"/>
+            <parameter name="deliveryOptions"/>
+            <parameter name="expiryHours" type="Integer" default="48"/>
+            <parameter name="imageUrls"/>
+            <parameter name="autoTags" type="List"><description>自动提取的标签ID列表</description></parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="listingId"/>
+            <parameter name="matchedCount" type="Integer"><description>立即找到的匹配数</description></parameter>
+        </out-parameters>
+        <actions>
+            <service-call name="marketplace.MarketplaceServices.create#ListingWithTags" in-map="context" out-map="context"/>
+        </actions>
+    </service>
+
+    <service verb="search" noun="Listings">
+        <description>搜索供需信息</description>
+        <in-parameters>
+            <parameter name="listingType"/>
+            <parameter name="category"/>
+            <parameter name="subCategory"/>
+            <parameter name="tagIds" type="List"/>
+            <parameter name="geoPointId"/>
+            <parameter name="maxDistance" type="BigDecimal" default="5.0"/>
+            <parameter name="priceMin" type="BigDecimal"/>
+            <parameter name="priceMax" type="BigDecimal"/>
+            <parameter name="status" default-value="ACTIVE"/>
+            <parameter name="pageIndex" type="Integer" default="0"/>
+            <parameter name="pageSize" type="Integer" default="20"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="listings" type="List"/>
+            <parameter name="totalCount" type="Integer"/>
+        </out-parameters>
+        <actions>
+            <service-call name="marketplace.MarketplaceServices.search#ListingsAdvanced" in-map="context" out-map="context"/>
+        </actions>
+    </service>
+
+    <service verb="update" noun="ListingStatus">
+        <description>更新供需信息状态</description>
+        <in-parameters>
+            <parameter name="listingId" required="true"/>
+            <parameter name="status" required="true"/>
+        </in-parameters>
+        <actions>
+            <service-call name="update#marketplace.listing.Listing" in-map="[listingId: listingId, status: status]"/>
+        </actions>
+    </service>
+
+    <!-- ==================== 智能匹配服务 ==================== -->
+
+    <service verb="find" noun="Matches">
+        <description>为指定供需信息查找匹配对象</description>
+        <in-parameters>
+            <parameter name="listingId" required="true"/>
+            <parameter name="maxResults" type="Integer" default="10"/>
+            <parameter name="minScore" type="BigDecimal" default="0.6"/>
+            <parameter name="autoNotify" type="Boolean" default="false">
+                <description>是否自动通知匹配方</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="matches" type="List">
+                <description>匹配结果列表，包含match对象和原因</description>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <service-call name="marketplace.MatchingServices.find#MatchesForListing" in-map="context" out-map="context"/>
+        </actions>
+    </service>
+
+    <service verb="calculate" noun="MatchScore">
+        <description>计算两个listing之间的匹配分数</description>
+        <in-parameters>
+            <parameter name="supplyListingId" required="true"/>
+            <parameter name="demandListingId" required="true"/>
+            <parameter name="includeUserPreference" type="Boolean" default="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="matchScore" type="BigDecimal"/>
+            <parameter name="tagSimilarity" type="BigDecimal"/>
+            <parameter name="geoProximity" type="BigDecimal"/>
+            <parameter name="priceMatch" type="BigDecimal"/>
+            <parameter name="freshnessScore" type="BigDecimal"/>
+            <parameter name="preferenceScore" type="BigDecimal"/>
+            <parameter name="matchReason" type="String"/>
+        </out-parameters>
+        <actions>
+            <service-call name="marketplace.MatchingServices.calculate#MatchScoreDetailed" in-map="context" out-map="context"/>
+        </actions>
+    </service>
+
+    <service verb="generate" noun="MatchReason">
+        <description>使用AI生成匹配推荐理由</description>
+        <in-parameters>
+            <parameter name="matchId" required="true"/>
+            <parameter name="supplyListingId" required="true"/>
+            <parameter name="demandListingId" required="true"/>
+            <parameter name="matchScore" type="BigDecimal" required="true"/>
+            <parameter name="useAI" type="Boolean" default="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="matchReason" type="String"/>
+        </out-parameters>
+        <actions>
+            <service-call name="marketplace.MatchingServices.generate#AIMatchReason" in-map="context" out-map="context"/>
+        </actions>
+    </service>
+
+    <service verb="confirm" noun="Match">
+        <description>确认撮合（授权联系）</description>
+        <in-parameters>
+            <parameter name="matchId" required="true"/>
+            <parameter name="confirmingPartyId" required="true">
+                <description>确认方的PartyId</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="contactInfo" type="Map">
+                <description>对方联系信息</description>
+            </parameter>
+            <parameter name="notified" type="Boolean"/>
+        </out-parameters>
+        <actions>
+            <service-call name="marketplace.MatchingServices.confirm#MatchAndNotify" in-map="context" out-map="context"/>
+        </actions>
+    </service>
+
+    <service verb="reject" noun="Match">
+        <description>拒绝撮合推荐</description>
+        <in-parameters>
+            <parameter name="matchId" required="true"/>
+            <parameter name="rejectionReason"/>
+        </in-parameters>
+        <actions>
+            <service-call name="update#marketplace.match.Match"
+                         in-map="[matchId: matchId, status: 'REJECTED', rejectedDate: ec.user.nowTimestamp, rejectionReason: rejectionReason]"/>
+        </actions>
+    </service>
+
+    <!-- ==================== 订单记录服务 ==================== -->
+
+    <service verb="create" noun="MatchOrder">
+        <description>记录撮合成功的订单</description>
+        <in-parameters>
+            <parameter name="matchId" required="true"/>
+            <parameter name="listingId" required="true"/>
+            <parameter name="sellerId" required="true"/>
+            <parameter name="buyerId" required="true"/>
+            <parameter name="productName" required="true"/>
+            <parameter name="quantity" type="BigDecimal" required="true"/>
+            <parameter name="quantityUnit" default-value="斤"/>
+            <parameter name="agreedPrice" type="BigDecimal"/>
+            <parameter name="deliveryMethod"/>
+            <parameter name="deliveryAddress"/>
+            <parameter name="deliveryTime" type="Timestamp"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="orderId"/>
+        </out-parameters>
+        <actions>
+            <set field="orderId" from="ec.entity.sequencedIdPrimary"/>
+            <set field="totalAmount" from="quantity * (agreedPrice ?: 0)"/>
+            <set field="confirmedDate" from="ec.user.nowTimestamp"/>
+            <set field="createdDate" from="ec.user.nowTimestamp"/>
+
+            <service-call name="create#marketplace.order.MatchOrder" in-map="context" out-map="context"/>
+
+            <!-- 更新Match状态 -->
+            <service-call name="update#marketplace.match.Match"
+                         in-map="[matchId: matchId, status: 'COMPLETED', completedDate: ec.user.nowTimestamp]"/>
+
+            <!-- 更新用户画像统计 -->
+            <service-call name="marketplace.ProfileServices.update#OrderStats"
+                         in-map="[sellerId: sellerId, buyerId: buyerId]"/>
+        </actions>
+    </service>
+
+    <service verb="rate" noun="MatchOrder">
+        <description>对订单进行评价</description>
+        <in-parameters>
+            <parameter name="orderId" required="true"/>
+            <parameter name="raterPartyId" required="true"/>
+            <parameter name="raterType" required="true"><description>SELLER或BUYER</description></parameter>
+            <parameter name="rating" type="Integer" required="true"><description>1-5星</description></parameter>
+            <parameter name="comment"/>
+        </in-parameters>
+        <actions>
+            <entity-find-one entity-name="marketplace.order.MatchOrder" value-field="order">
+                <field-map field-name="orderId"/>
+            </entity-find-one>
+
+            <if condition="raterType == 'SELLER'">
+                <service-call name="update#marketplace.order.MatchOrder"
+                             in-map="[orderId: orderId, sellerRating: rating, sellerComment: comment]"/>
+                <set field="ratedPartyId" from="order.buyerId"/>
+            </if>
+            <if condition="raterType == 'BUYER'">
+                <service-call name="update#marketplace.order.MatchOrder"
+                             in-map="[orderId: orderId, buyerRating: rating, buyerComment: comment]"/>
+                <set field="ratedPartyId" from="order.sellerId"/>
+            </if>
+
+            <!-- 更新被评价方的信用分 -->
+            <service-call name="marketplace.ProfileServices.update#CreditScore"
+                         in-map="[partyId: ratedPartyId, newRating: rating]"/>
+        </actions>
+    </service>
+
+    <!-- ==================== 用户画像服务 ==================== -->
+
+    <service verb="get" noun="UserProfile">
+        <description>获取用户画像</description>
+        <in-parameters>
+            <parameter name="partyId" required="true"/>
+            <parameter name="includePreferences" type="Boolean" default="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="profile" type="Map"/>
+            <parameter name="tagPreferences" type="Map"/>
+        </out-parameters>
+        <actions>
+            <service-call name="marketplace.ProfileServices.get#ProfileWithPreferences" in-map="context" out-map="context"/>
+        </actions>
+    </service>
+
+    <service verb="update" noun="UserProfile">
+        <description>更新用户画像</description>
+        <in-parameters>
+            <parameter name="partyId" required="true"/>
+            <parameter name="profileType"/>
+            <parameter name="mainCategories"/>
+            <parameter name="preferredCategories"/>
+            <parameter name="preferredGeoPointId"/>
+            <parameter name="preferredDeliveryRange" type="BigDecimal"/>
+        </in-parameters>
+        <actions>
+            <service-call name="store#marketplace.profile.UserProfile" in-map="context"/>
+            <set field="lastUpdatedStamp" from="ec.user.nowTimestamp"/>
+        </actions>
+    </service>
+
+    <service verb="record" noun="UserBehavior">
+        <description>记录用户行为（用于画像分析）</description>
+        <in-parameters>
+            <parameter name="partyId" required="true"/>
+            <parameter name="behaviorType" required="true"/>
+            <parameter name="targetType"/>
+            <parameter name="targetId"/>
+            <parameter name="behaviorData"/>
+            <parameter name="sessionId"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="behaviorId"/>
+        </out-parameters>
+        <actions>
+            <set field="behaviorId" from="ec.entity.sequencedIdPrimary"/>
+            <set field="createdDate" from="ec.user.nowTimestamp"/>
+            <service-call name="create#marketplace.profile.UserBehavior" in-map="context" out-map="context"/>
+
+            <!-- 异步更新用户画像 -->
+            <service-call name="marketplace.ProfileServices.async#RebuildProfile"
+                         in-map="[partyId: partyId]" async="true"/>
+        </actions>
+    </service>
+
+    <service verb="rebuild" noun="UserProfile">
+        <description>基于历史行为重建用户画像</description>
+        <in-parameters>
+            <parameter name="partyId" required="true"/>
+        </in-parameters>
+        <actions>
+            <service-call name="marketplace.ProfileServices.rebuild#ProfileFromBehaviors" in-map="context"/>
+        </actions>
+    </service>
+
+    <!-- ==================== 标签管理服务 ==================== -->
+
+    <service verb="extract" noun="TagsFromText">
+        <description>从文本中提取标签（使用AI）</description>
+        <in-parameters>
+            <parameter name="text" required="true"/>
+            <parameter name="category"/>
+            <parameter name="useAI" type="Boolean" default="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="tagIds" type="List"/>
+            <parameter name="tags" type="List"/>
+        </out-parameters>
+        <actions>
+            <service-call name="marketplace.TagServices.extract#TagsUsingAI" in-map="context" out-map="context"/>
+        </actions>
+    </service>
+
+    <service verb="add" noun="ListingTags">
+        <description>为Listing添加标签</description>
+        <in-parameters>
+            <parameter name="listingId" required="true"/>
+            <parameter name="tagIds" type="List" required="true"/>
+            <parameter name="source" default-value="MANUAL"/>
+        </in-parameters>
+        <actions>
+            <iterate list="tagIds" entry="tagId">
+                <service-call name="create#marketplace.listing.ListingTag"
+                             in-map="[listingId: listingId, tagId: tagId, source: source, createdDate: ec.user.nowTimestamp]"/>
+            </iterate>
+        </actions>
+    </service>
+
+    <!-- ==================== 通知服务 ==================== -->
+
+    <service verb="send" noun="MatchNotification">
+        <description>发送撮合通知</description>
+        <in-parameters>
+            <parameter name="recipientPartyId" required="true"/>
+            <parameter name="matchId" required="true"/>
+            <parameter name="notificationType" required="true"/>
+            <parameter name="channel" default-value="ROCKETCHAT"/>
+            <parameter name="messageTemplate"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="notificationId"/>
+            <parameter name="sent" type="Boolean"/>
+        </out-parameters>
+        <actions>
+            <service-call name="marketplace.NotificationServices.send#MatchNotificationViaChannel" in-map="context" out-map="context"/>
+        </actions>
+    </service>
+
+</services>

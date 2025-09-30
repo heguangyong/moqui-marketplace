@@ -1,0 +1,28 @@
+/*
+ * This software is in the public domain under CC0 1.0 Universal plus a
+ * Grant of Patent License.
+ */
+
+apply plugin: 'groovy'
+
+version = '1.0.0'
+
+dependencies {
+    implementation project(':framework')
+    implementation project(':runtime:component:mantle-udm')
+    implementation project(':runtime:component:mantle-usl')
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+    options.compilerArgs << '-Xlint:unchecked' << '-Xlint:deprecation'
+}
+
+jar {
+    manifest {
+        attributes(
+            'Implementation-Title': 'Moqui Marketplace Component',
+            'Implementation-Version': version
+        )
+    }
+}

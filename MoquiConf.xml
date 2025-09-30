@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<moqui-conf xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/moqui-conf-3.xsd">
+
+    <!-- Marketplace 组件配置 -->
+
+    <default-property name="marketplace.matching.min.score" value="0.6">
+        <description>最小匹配分数阈值（0-1）</description>
+    </default-property>
+
+    <default-property name="marketplace.matching.max.results" value="10">
+        <description>最大匹配结果数量</description>
+    </default-property>
+
+    <default-property name="marketplace.geo.max.distance" value="5.0">
+        <description>最大配送距离（公里）</description>
+    </default-property>
+
+    <default-property name="marketplace.listing.expire.hours" value="48">
+        <description>供需信息默认有效期（小时）</description>
+    </default-property>
+
+    <default-property name="marketplace.notification.channel" value="ROCKETCHAT">
+        <description>通知渠道：ROCKETCHAT, SMS, EMAIL</description>
+    </default-property>
+
+    <!-- AI 相关配置 -->
+    <default-property name="marketplace.ai.provider" value="CLAUDE">
+        <description>AI提供商：CLAUDE, OLLAMA, GPT</description>
+    </default-property>
+
+    <default-property name="marketplace.ai.model" value="claude-3-5-sonnet-20241022">
+        <description>AI模型名称</description>
+    </default-property>
+
+    <default-property name="marketplace.ai.enable.match.reason" value="true">
+        <description>是否使用AI生成匹配理由</description>
+    </default-property>
+
+    <default-property name="marketplace.ai.enable.tag.extraction" value="true">
+        <description>是否使用AI提取标签</description>
+    </default-property>
+
+    <!-- Rocket.Chat 集成配置 -->
+    <default-property name="rocketchat.server.url" value="${ROCKETCHAT_URL:http://localhost:3000}">
+        <description>Rocket.Chat服务器地址</description>
+    </default-property>
+
+    <default-property name="rocketchat.bot.username" value="${ROCKETCHAT_BOT_USER:marketplace-bot}">
+        <description>Rocket.Chat Bot用户名</description>
+    </default-property>
+
+    <default-property name="rocketchat.bot.password" value="${ROCKETCHAT_BOT_PASS:}">
+        <description>Rocket.Chat Bot密码</description>
+    </default-property>
+
+    <default-property name="rocketchat.webhook.token" value="${ROCKETCHAT_WEBHOOK_TOKEN:}">
+        <description>Rocket.Chat Webhook Token</description>
+    </default-property>
+
+    <!-- MCP Server 配置 -->
+    <default-property name="mcp.server.host" value="${MCP_SERVER_HOST:localhost}">
+        <description>MCP Server主机地址</description>
+    </default-property>
+
+    <default-property name="mcp.server.port" value="${MCP_SERVER_PORT:3001}">
+        <description>MCP Server端口</description>
+    </default-property>
+
+    <default-property name="mcp.server.enable" value="${MCP_SERVER_ENABLE:true}">
+        <description>是否启用MCP Server</description>
+    </default-property>
+
+</moqui-conf>

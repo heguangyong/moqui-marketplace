@@ -1,0 +1,445 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<entities xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/entity-definition-3.xsd">
+
+    <!-- ==================== 供需信息 ==================== -->
+
+    <entity entity-name="Listing" package="marketplace.listing">
+        <description>供应/需求信息主表</description>
+        <field name="listingId" type="id" is-pk="true"/>
+        <field name="listingType" type="text-short">
+            <description>SUPPLY-供应, DEMAND-需求</description>
+        </field>
+        <field name="publisherId" type="id">
+            <description>发布者PartyId</description>
+        </field>
+        <field name="publisherType" type="text-short">
+            <description>MERCHANT-商家, CUSTOMER-消费者</description>
+        </field>
+
+        <!-- 基本信息 -->
+        <field name="title" type="text-medium"/>
+        <field name="description" type="text-long"/>
+        <field name="category" type="text-short">
+            <description>主品类: VEGETABLE-蔬菜, MEAT-肉类, FRUIT-水果, SEAFOOD-海鲜</description>
+        </field>
+        <field name="subCategory" type="text-short">
+            <description>子品类: 如叶菜、根茎菜、猪肉、牛肉等</description>
+        </field>
+
+        <!-- 数量和价格 -->
+        <field name="quantity" type="number-decimal">
+            <description>数量（斤/公斤）</description>
+        </field>
+        <field name="quantityUnit" type="text-short" default="斤"/>
+        <field name="priceMin" type="currency-amount">
+            <description>价格区间最低价</description>
+        </field>
+        <field name="priceMax" type="currency-amount">
+            <description>价格区间最高价</description>
+        </field>
+        <field name="currencyUomId" type="id" default="CNY"/>
+
+        <!-- 地理位置 -->
+        <field name="locationDesc" type="text-medium">
+            <description>位置描述：如"常平镇XX路"</description>
+        </field>
+        <field name="geoPointId" type="id">
+            <description>关联到GeoPoint获取经纬度</description>
+        </field>
+        <field name="deliveryRange" type="number-decimal">
+            <description>配送范围(公里)</description>
+        </field>
+        <field name="deliveryOptions" type="text-medium">
+            <description>配送选项JSON: ["DELIVERY","PICKUP"]</description>
+        </field>
+
+        <!-- 时效 -->
+        <field name="validFrom" type="date-time"/>
+        <field name="validThru" type="date-time"/>
+        <field name="expiryHours" type="number-integer" default="48">
+            <description>有效期(小时)</description>
+        </field>
+
+        <!-- 状态和评分 -->
+        <field name="status" type="text-short" default="ACTIVE">
+            <description>ACTIVE-活跃, MATCHED-已撮合, EXPIRED-过期, CANCELLED-取消</description>
+        </field>
+        <field name="freshnessScore" type="number-decimal">
+            <description>新鲜度评分(0-1)，随时间衰减</description>
+        </field>
+        <field name="viewCount" type="number-integer" default="0"/>
+        <field name="matchCount" type="number-integer" default="0"/>
+
+        <!-- 附件 -->
+        <field name="imageUrls" type="text-long">
+            <description>图片URLs JSON数组</description>
+        </field>
+
+        <!-- 审计字段 -->
+        <field name="createdDate" type="date-time"/>
+        <field name="createdByUserId" type="id"/>
+        <field name="lastUpdatedStamp" type="date-time"/>
+
+        <relationship type="one" related="mantle.party.Party" short-alias="publisher">
+            <key-map field-name="publisherId" related="partyId"/>
+        </relationship>
+        <relationship type="one" related="mantle.humanres.position.GeoPoint" short-alias="geoPoint">
+            <key-map field-name="geoPointId"/>
+        </relationship>
+
+        <index name="LISTING_TYPE_STATUS" unique="false">
+            <index-field name="listingType"/>
+            <index-field name="status"/>
+        </index>
+        <index name="LISTING_CATEGORY" unique="false">
+            <index-field name="category"/>
+            <index-field name="subCategory"/>
+        </index>
+        <index name="LISTING_VALID_THRU" unique="false">
+            <index-field name="validThru"/>
+        </index>
+    </entity>
+
+    <!-- ==================== 标签系统 ==================== -->
+
+    <entity entity-name="Tag" package="marketplace.tag">
+        <description>标签主表</description>
+        <field name="tagId" type="id" is-pk="true"/>
+        <field name="tagType" type="text-short">
+            <description>CATEGORY-品类, ATTRIBUTE-属性, LOCATION-地理, TIMING-时效</description>
+        </field>
+        <field name="tagName" type="text-medium"/>
+        <field name="tagNameEn" type="text-medium">
+            <description>英文标签名</description>
+        </field>
+        <field name="parentTagId" type="id">
+            <description>父标签ID（支持层级）</description>
+        </field>
+        <field name="description" type="text-long"/>
+        <field name="sortOrder" type="number-integer" default="100"/>
+        <field name="isActive" type="text-indicator" default="Y"/>
+
+        <relationship type="one" title="Parent" related="Tag" short-alias="parent">
+            <key-map field-name="parentTagId" related="tagId"/>
+        </relationship>
+    </entity>
+
+    <entity entity-name="ListingTag" package="marketplace.listing">
+        <description>供需信息与标签的关联</description>
+        <field name="listingId" type="id" is-pk="true"/>
+        <field name="tagId" type="id" is-pk="true"/>
+        <field name="weight" type="number-decimal" default="1.0">
+            <description>标签权重，用于计算相似度</description>
+        </field>
+        <field name="source" type="text-short">
+            <description>标签来源: AUTO-自动提取, MANUAL-手动添加, AI-AI生成</description>
+        </field>
+        <field name="createdDate" type="date-time"/>
+
+        <relationship type="one" related="Listing" short-alias="listing">
+            <key-map field-name="listingId"/>
+        </relationship>
+        <relationship type="one" related="Tag" short-alias="tag">
+            <key-map field-name="tagId"/>
+        </relationship>
+    </entity>
+
+    <!-- ==================== 撮合记录 ==================== -->
+
+    <entity entity-name="Match" package="marketplace.match">
+        <description>供需撮合记录</description>
+        <field name="matchId" type="id" is-pk="true"/>
+        <field name="supplyListingId" type="id">
+            <description>供应信息ID</description>
+        </field>
+        <field name="demandListingId" type="id">
+            <description>需求信息ID</description>
+        </field>
+        <field name="matchScore" type="number-decimal">
+            <description>匹配度分数(0-1)</description>
+        </field>
+        <field name="matchReason" type="text-long">
+            <description>AI生成的匹配理由</description>
+        </field>
+
+        <!-- 匹配细节评分 -->
+        <field name="tagSimilarity" type="number-decimal">
+            <description>标签相似度分数</description>
+        </field>
+        <field name="geoProximity" type="number-decimal">
+            <description>地理接近度分数</description>
+        </field>
+        <field name="priceMatch" type="number-decimal">
+            <description>价格匹配度分数</description>
+        </field>
+        <field name="freshnessScore" type="number-decimal">
+            <description>时效性分数</description>
+        </field>
+        <field name="preferenceScore" type="number-decimal">
+            <description>用户偏好分数</description>
+        </field>
+
+        <!-- 状态流转 -->
+        <field name="status" type="text-short" default="SUGGESTED">
+            <description>
+                SUGGESTED-已推荐,
+                VIEWED-已查看,
+                CONTACTED-已联系,
+                COMPLETED-已完成,
+                REJECTED-已拒绝
+            </description>
+        </field>
+        <field name="suggestedDate" type="date-time"/>
+        <field name="viewedDate" type="date-time"/>
+        <field name="contactedDate" type="date-time"/>
+        <field name="completedDate" type="date-time"/>
+        <field name="rejectedDate" type="date-time"/>
+        <field name="rejectionReason" type="text-long"/>
+
+        <!-- 通知记录 -->
+        <field name="notifiedToSupplier" type="text-indicator" default="N"/>
+        <field name="notifiedToDemander" type="text-indicator" default="N"/>
+        <field name="supplierNotifiedDate" type="date-time"/>
+        <field name="demanderNotifiedDate" type="date-time"/>
+
+        <relationship type="one" title="Supply" related="Listing" short-alias="supplyListing">
+            <key-map field-name="supplyListingId" related="listingId"/>
+        </relationship>
+        <relationship type="one" title="Demand" related="Listing" short-alias="demandListing">
+            <key-map field-name="demandListingId" related="listingId"/>
+        </relationship>
+
+        <index name="MATCH_STATUS" unique="false">
+            <index-field name="status"/>
+        </index>
+        <index name="MATCH_SCORE" unique="false">
+            <index-field name="matchScore"/>
+        </index>
+    </entity>
+
+    <!-- ==================== 订单记录 ==================== -->
+
+    <entity entity-name="MatchOrder" package="marketplace.order">
+        <description>撮合成功后的订单记录（不涉及支付）</description>
+        <field name="orderId" type="id" is-pk="true"/>
+        <field name="matchId" type="id"/>
+        <field name="listingId" type="id">
+            <description>原始供需信息ID</description>
+        </field>
+
+        <!-- 交易双方 -->
+        <field name="sellerId" type="id"/>
+        <field name="buyerId" type="id"/>
+
+        <!-- 交易内容 -->
+        <field name="productName" type="text-medium"/>
+        <field name="quantity" type="number-decimal"/>
+        <field name="quantityUnit" type="text-short"/>
+        <field name="agreedPrice" type="currency-amount">
+            <description>最终成交价格</description>
+        </field>
+        <field name="totalAmount" type="currency-amount"/>
+        <field name="currencyUomId" type="id" default="CNY"/>
+
+        <!-- 交付信息 -->
+        <field name="deliveryMethod" type="text-short">
+            <description>DELIVERY-配送, PICKUP-自提</description>
+        </field>
+        <field name="deliveryAddress" type="text-long"/>
+        <field name="deliveryTime" type="date-time"/>
+
+        <!-- 状态 -->
+        <field name="status" type="text-short" default="CONFIRMED">
+            <description>
+                CONFIRMED-已确认,
+                DELIVERING-配送中,
+                COMPLETED-已完成,
+                CANCELLED-已取消
+            </description>
+        </field>
+
+        <!-- 评价 -->
+        <field name="sellerRating" type="number-integer">
+            <description>买家对卖家评分(1-5)</description>
+        </field>
+        <field name="buyerRating" type="number-integer">
+            <description>卖家对买家评分(1-5)</description>
+        </field>
+        <field name="sellerComment" type="text-long"/>
+        <field name="buyerComment" type="text-long"/>
+
+        <!-- 审计 -->
+        <field name="confirmedDate" type="date-time"/>
+        <field name="completedDate" type="date-time"/>
+        <field name="cancelledDate" type="date-time"/>
+        <field name="createdDate" type="date-time"/>
+
+        <relationship type="one" related="Match" short-alias="match">
+            <key-map field-name="matchId"/>
+        </relationship>
+        <relationship type="one" related="Listing" short-alias="listing">
+            <key-map field-name="listingId"/>
+        </relationship>
+        <relationship type="one" title="Seller" related="mantle.party.Party" short-alias="seller">
+            <key-map field-name="sellerId" related="partyId"/>
+        </relationship>
+        <relationship type="one" title="Buyer" related="mantle.party.Party" short-alias="buyer">
+            <key-map field-name="buyerId" related="partyId"/>
+        </relationship>
+    </entity>
+
+    <!-- ==================== 用户画像 ==================== -->
+
+    <entity entity-name="UserProfile" package="marketplace.profile">
+        <description>用户画像主表</description>
+        <field name="partyId" type="id" is-pk="true"/>
+        <field name="profileType" type="text-short">
+            <description>MERCHANT-商家, CUSTOMER-消费者</description>
+        </field>
+
+        <!-- 商家画像 -->
+        <field name="supplyCapacity" type="text-short">
+            <description>供应能力: LOW-小, MEDIUM-中, HIGH-大</description>
+        </field>
+        <field name="mainCategories" type="text-long">
+            <description>主营品类 JSON数组</description>
+        </field>
+        <field name="supplyFrequency" type="number-decimal">
+            <description>平均供应频次（次/周）</description>
+        </field>
+        <field name="avgSupplyQuantity" type="number-decimal">
+            <description>平均供应数量</description>
+        </field>
+
+        <!-- 客户画像 -->
+        <field name="purchaseFrequency" type="number-decimal">
+            <description>购买频次（次/月）</description>
+        </field>
+        <field name="preferredCategories" type="text-long">
+            <description>偏好品类 JSON数组</description>
+        </field>
+        <field name="priceSensitivity" type="number-decimal">
+            <description>价格敏感度(0-1, 越高越敏感)</description>
+        </field>
+        <field name="avgPurchaseQuantity" type="number-decimal">
+            <description>平均购买数量</description>
+        </field>
+
+        <!-- 通用画像 -->
+        <field name="creditScore" type="number-decimal" default="0.8">
+            <description>信用评分(0-1)</description>
+        </field>
+        <field name="responseRate" type="number-decimal">
+            <description>响应率(0-1)</description>
+        </field>
+        <field name="matchSuccessRate" type="number-decimal">
+            <description>撮合成功率(0-1)</description>
+        </field>
+        <field name="avgResponseTime" type="number-integer">
+            <description>平均响应时间(分钟)</description>
+        </field>
+
+        <!-- 标签偏好 -->
+        <field name="tagPreferences" type="text-very-long">
+            <description>标签偏好权重 JSON: {tagId: weight}</description>
+        </field>
+
+        <!-- 地理偏好 -->
+        <field name="preferredGeoPointId" type="id">
+            <description>常用地理位置</description>
+        </field>
+        <field name="preferredDeliveryRange" type="number-decimal">
+            <description>偏好配送范围(公里)</description>
+        </field>
+
+        <!-- 活跃度 -->
+        <field name="totalListings" type="number-integer" default="0">
+            <description>发布信息总数</description>
+        </field>
+        <field name="totalMatches" type="number-integer" default="0">
+            <description>撮合总数</description>
+        </field>
+        <field name="totalOrders" type="number-integer" default="0">
+            <description>订单总数</description>
+        </field>
+        <field name="lastActiveDate" type="date-time"/>
+        <field name="lastListingDate" type="date-time"/>
+
+        <!-- 审计 -->
+        <field name="createdDate" type="date-time"/>
+        <field name="lastUpdatedStamp" type="date-time"/>
+
+        <relationship type="one" related="mantle.party.Party" short-alias="party">
+            <key-map field-name="partyId"/>
+        </relationship>
+        <relationship type="one" related="mantle.humanres.position.GeoPoint" short-alias="preferredGeoPoint">
+            <key-map field-name="preferredGeoPointId" related="geoPointId"/>
+        </relationship>
+    </entity>
+
+    <entity entity-name="UserBehavior" package="marketplace.profile">
+        <description>用户行为记录（用于画像构建）</description>
+        <field name="behaviorId" type="id" is-pk="true"/>
+        <field name="partyId" type="id"/>
+        <field name="behaviorType" type="text-short">
+            <description>
+                PUBLISH-发布, VIEW-查看, CONTACT-联系,
+                ORDER-下单, RATE-评价, SEARCH-搜索
+            </description>
+        </field>
+        <field name="targetType" type="text-short">
+            <description>LISTING, MATCH, ORDER</description>
+        </field>
+        <field name="targetId" type="id">
+            <description>目标对象ID</description>
+        </field>
+        <field name="behaviorData" type="text-long">
+            <description>行为数据JSON（如搜索关键词、查看时长等）</description>
+        </field>
+        <field name="sessionId" type="id">
+            <description>关联到McpDialogSession</description>
+        </field>
+        <field name="createdDate" type="date-time"/>
+
+        <relationship type="one" related="mantle.party.Party" short-alias="party">
+            <key-map field-name="partyId"/>
+        </relationship>
+
+        <index name="BEHAVIOR_PARTY_DATE" unique="false">
+            <index-field name="partyId"/>
+            <index-field name="createdDate"/>
+        </index>
+    </entity>
+
+    <!-- ==================== 通知管理 ==================== -->
+
+    <entity entity-name="MatchNotification" package="marketplace.notification">
+        <description>撮合推送通知记录</description>
+        <field name="notificationId" type="id" is-pk="true"/>
+        <field name="recipientPartyId" type="id"/>
+        <field name="matchId" type="id"/>
+        <field name="notificationType" type="text-short">
+            <description>NEW_MATCH-新匹配, CONTACT_REQUEST-联系请求</description>
+        </field>
+        <field name="channel" type="text-short">
+            <description>ROCKETCHAT, SMS, EMAIL</description>
+        </field>
+        <field name="messageContent" type="text-long"/>
+        <field name="status" type="text-short" default="PENDING">
+            <description>PENDING-待发送, SENT-已发送, DELIVERED-已送达, READ-已读</description>
+        </field>
+        <field name="sentDate" type="date-time"/>
+        <field name="deliveredDate" type="date-time"/>
+        <field name="readDate" type="date-time"/>
+        <field name="createdDate" type="date-time"/>
+
+        <relationship type="one" related="mantle.party.Party" short-alias="recipient">
+            <key-map field-name="recipientPartyId" related="partyId"/>
+        </relationship>
+        <relationship type="one" related="Match" short-alias="match">
+            <key-map field-name="matchId"/>
+        </relationship>
+    </entity>
+
+</entities>

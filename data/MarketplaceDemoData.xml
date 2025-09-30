@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<entity-facade-xml type="demo">
+
+    <!-- ==================== 示例商家 ==================== -->
+
+    <!-- 商家1: 刘师傅肉铺 -->
+    <mantle.party.Party partyId="MERCHANT_001" partyTypeEnumId="PtyPerson" />
+    <mantle.party.Person partyId="MERCHANT_001" firstName="刘" lastName="师傅" nickname="刘师傅肉铺"/>
+    <mantle.party.contact.ContactMech contactMechId="CM_MERCHANT_001_PHONE" contactMechTypeEnumId="CmtTelecomNumber"/>
+    <mantle.party.contact.TelecomNumber contactMechId="CM_MERCHANT_001_PHONE" countryCode="86" areaCode="139" contactNumber="12345678"/>
+    <mantle.party.contact.PartyContactMech partyId="MERCHANT_001" contactMechId="CM_MERCHANT_001_PHONE"
+                                          contactMechPurposeId="PhonePrimary" fromDate="2024-01-01 00:00:00"/>
+
+    <marketplace.profile.UserProfile partyId="MERCHANT_001" profileType="MERCHANT"
+                                    supplyCapacity="MEDIUM"
+                                    mainCategories="[&quot;CAT_MEAT_PORK&quot;,&quot;CAT_MEAT_BEEF&quot;]"
+                                    supplyFrequency="5.0" avgSupplyQuantity="50.0"
+                                    creditScore="0.92" responseRate="0.95" matchSuccessRate="0.88"
+                                    totalListings="52" totalMatches="45" totalOrders="40"
+                                    lastActiveDate="2025-09-30 10:00:00" createdDate="2024-01-01 00:00:00"/>
+
+    <!-- 商家2: 陈大哥菜园 -->
+    <mantle.party.Party partyId="MERCHANT_002" partyTypeEnumId="PtyPerson" />
+    <mantle.party.Person partyId="MERCHANT_002" firstName="陈" lastName="大哥" nickname="陈大哥菜园"/>
+    <marketplace.profile.UserProfile partyId="MERCHANT_002" profileType="MERCHANT"
+                                    supplyCapacity="HIGH"
+                                    mainCategories="[&quot;CAT_VEGETABLE&quot;]"
+                                    supplyFrequency="6.0" avgSupplyQuantity="100.0"
+                                    creditScore="0.90" responseRate="0.92" matchSuccessRate="0.85"
+                                    totalListings="78" totalMatches="65" totalOrders="58"
+                                    createdDate="2024-01-01 00:00:00"/>
+
+    <!-- ==================== 示例消费者 ==================== -->
+
+    <!-- 消费者1: 张女士 -->
+    <mantle.party.Party partyId="CUSTOMER_001" partyTypeEnumId="PtyPerson" />
+    <mantle.party.Person partyId="CUSTOMER_001" firstName="张" lastName="女士"/>
+    <marketplace.profile.UserProfile partyId="CUSTOMER_001" profileType="CUSTOMER"
+                                    purchaseFrequency="8.0"
+                                    preferredCategories="[&quot;CAT_VEGETABLE&quot;,&quot;CAT_MEAT&quot;]"
+                                    priceSensitivity="0.3" avgPurchaseQuantity="15.0"
+                                    creditScore="0.95" responseRate="0.90" matchSuccessRate="0.80"
+                                    preferredDeliveryRange="3.0"
+                                    totalListings="25" totalMatches="20" totalOrders="18"
+                                    createdDate="2024-02-01 00:00:00"/>
+
+    <!-- 消费者2: 李先生（餐厅采购） -->
+    <mantle.party.Party partyId="CUSTOMER_002" partyTypeEnumId="PtyOrganization" />
+    <mantle.party.Organization partyId="CUSTOMER_002" organizationName="李记餐厅"/>
+    <marketplace.profile.UserProfile partyId="CUSTOMER_002" profileType="CUSTOMER"
+                                    purchaseFrequency="20.0"
+                                    preferredCategories="[&quot;CAT_VEGETABLE&quot;,&quot;CAT_MEAT&quot;,&quot;CAT_SEAFOOD&quot;]"
+                                    priceSensitivity="0.6" avgPurchaseQuantity="50.0"
+                                    creditScore="0.88" responseRate="0.85" matchSuccessRate="0.75"
+                                    preferredDeliveryRange="5.0"
+                                    totalListings="120" totalMatches="95" totalOrders="80"
+                                    createdDate="2024-01-15 00:00:00"/>
+
+    <!-- ==================== 示例地理位置 ==================== -->
+
+    <mantle.humanres.position.GeoPoint geoPointId="GEO_MERCHANT_001"
+                                       latitude="23.0456" longitude="113.7567"
+                                       elevation="50.0" elevationUomId="LEN_m"/>
+    <mantle.humanres.position.GeoPoint geoPointId="GEO_MERCHANT_002"
+                                       latitude="23.0489" longitude="113.7600"
+                                       elevation="50.0" elevationUomId="LEN_m"/>
+    <mantle.humanres.position.GeoPoint geoPointId="GEO_CUSTOMER_001"
+                                       latitude="23.0470" longitude="113.7580"
+                                       elevation="50.0" elevationUomId="LEN_m"/>
+
+    <!-- ==================== 示例供应信息 ==================== -->
+
+    <marketplace.listing.Listing listingId="SUPPLY_001" listingType="SUPPLY"
+                                publisherId="MERCHANT_001" publisherType="MERCHANT"
+                                title="新鲜排骨" description="本地养殖，当天新鲜排骨"
+                                category="CAT_MEAT" subCategory="CAT_MEAT_PORK"
+                                quantity="30.0" quantityUnit="斤"
+                                priceMin="25.0" priceMax="28.0" currencyUomId="CNY"
+                                locationDesc="常平镇肉铺街123号" geoPointId="GEO_MERCHANT_001"
+                                deliveryRange="3.0" deliveryOptions="[&quot;DELIVERY&quot;,&quot;PICKUP&quot;]"
+                                validFrom="2025-09-30 08:00:00" validThru="2025-09-30 20:00:00"
+                                status="ACTIVE" freshnessScore="0.95"
+                                createdDate="2025-09-30 08:00:00"/>
+
+    <marketplace.listing.ListingTag listingId="SUPPLY_001" tagId="CAT_MEAT_PORK" weight="1.0" source="MANUAL" createdDate="2025-09-30 08:00:00"/>
+    <marketplace.listing.ListingTag listingId="SUPPLY_001" tagId="ATTR_FRESH" weight="1.0" source="AUTO" createdDate="2025-09-30 08:00:00"/>
+    <marketplace.listing.ListingTag listingId="SUPPLY_001" tagId="TIME_TODAY" weight="1.0" source="AUTO" createdDate="2025-09-30 08:00:00"/>
+    <marketplace.listing.ListingTag listingId="SUPPLY_001" tagId="DELIVERY_BOTH" weight="1.0" source="AUTO" createdDate="2025-09-30 08:00:00"/>
+
+    <!-- ==================== 示例需求信息 ==================== -->
+
+    <marketplace.listing.Listing listingId="DEMAND_001" listingType="DEMAND"
+                                publisherId="CUSTOMER_001" publisherType="CUSTOMER"
+                                title="需要新鲜排骨" description="做周末家宴用"
+                                category="CAT_MEAT" subCategory="CAT_MEAT_PORK"
+                                quantity="3.0" quantityUnit="斤"
+                                priceMin="20.0" priceMax="30.0" currencyUomId="CNY"
+                                locationDesc="常平镇小区" geoPointId="GEO_CUSTOMER_001"
+                                deliveryRange="3.0" deliveryOptions="[&quot;DELIVERY&quot;]"
+                                validFrom="2025-09-30 09:00:00" validThru="2025-09-30 18:00:00"
+                                status="ACTIVE" freshnessScore="0.90"
+                                createdDate="2025-09-30 09:00:00"/>
+
+    <marketplace.listing.ListingTag listingId="DEMAND_001" tagId="CAT_MEAT_PORK" weight="1.0" source="MANUAL" createdDate="2025-09-30 09:00:00"/>
+    <marketplace.listing.ListingTag listingId="DEMAND_001" tagId="ATTR_FRESH" weight="1.0" source="AUTO" createdDate="2025-09-30 09:00:00"/>
+    <marketplace.listing.ListingTag listingId="DEMAND_001" tagId="TIME_TODAY" weight="1.0" source="AUTO" createdDate="2025-09-30 09:00:00"/>
+
+</entity-facade-xml>
