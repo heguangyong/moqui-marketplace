@@ -3,6 +3,17 @@
 
     <!-- ==================== 示例商家 ==================== -->
 
+    <!-- 演示商家: 用于测试和演示 -->
+    <mantle.party.Party partyId="DEMO_MERCHANT" partyTypeEnumId="PtyOrganization" />
+    <mantle.party.Organization partyId="DEMO_MERCHANT" organizationName="演示商家"/>
+    <marketplace.profile.UserProfile partyId="DEMO_MERCHANT" profileType="MERCHANT"
+                                    supplyCapacity="HIGH"
+                                    mainCategories="[&quot;钢材&quot;,&quot;建材&quot;,&quot;装修&quot;]"
+                                    supplyFrequency="10.0" avgSupplyQuantity="200.0"
+                                    creditScore="0.95" responseRate="0.98" matchSuccessRate="0.92"
+                                    totalListings="100" totalMatches="85" totalOrders="75"
+                                    lastActiveDate="2025-10-01 00:00:00" createdDate="2024-01-01 00:00:00"/>
+
     <!-- 商家1: 刘师傅肉铺 -->
     <mantle.party.Party partyId="MERCHANT_001" partyTypeEnumId="PtyPerson" />
     <mantle.party.Person partyId="MERCHANT_001" firstName="刘" lastName="师傅" nickname="刘师傅肉铺"/>

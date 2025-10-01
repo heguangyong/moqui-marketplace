@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
+        default-menu-title="发布供应">
+
+    <parameter name="merchantId"/>
+
+    <actions>
+        <if condition="!merchantId">
+            <set field="merchantId" from="ec.user.userAccount?.partyId ?: 'DEMO_MERCHANT'"/>
+        </if>
+    </actions>
+
+    <widgets>
+        <container-row>
+            <row-col lg="8" md="10" sm="12">
+                <container>
+                    <label text="发布新供应" type="h2"/>
+
+                    <form-single name="CreateSupplyForm" transition="../createSupply">
+                        <field name="merchantId"><default-field><hidden/></default-field></field>
+
+                        <field name="productName">
+                            <default-field title="商品名称" tooltip="请输入准确的商品名称">
+                                <text-line size="40"/>
+                            </default-field>
+                        </field>
+
+                        <field name="category">
+                            <default-field title="商品类别">
+                                <drop-down>
+                                    <option key="ELECTRONICS" text="电子产品"/>
+                                    <option key="CLOTHING" text="服装饰品"/>
+                                    <option key="FOOD" text="食品饮料"/>
+                                    <option key="HOME_APPLIANCES" text="家用电器"/>
+                                    <option key="BEAUTY" text="美妆个护"/>
+                                    <option key="BOOKS" text="图书音像"/>
+                                    <option key="SPORTS" text="运动户外"/>
+                                    <option key="AUTOMOTIVE" text="汽车用品"/>
+                                    <option key="INDUSTRIAL" text="工业用品"/>
+                                    <option key="OTHER" text="其他"/>
+                                </drop-down>
+                            </default-field>
+                        </field>
+
+                        <field name="description">
+                            <default-field title="商品描述">
+                                <text-area rows="4" cols="60"/>
+                            </default-field>
+                        </field>
+
+                        <field name="specifications">
+                            <default-field title="规格参数" tooltip="请详细描述商品的规格、型号、尺寸等">
+                                <text-area rows="3" cols="60"/>
+                            </default-field>
+                        </field>
+
+                        <field name="price">
+                            <default-field title="单价">
+                                <text-line size="20"/>
+                            </default-field>
+                        </field>
+
+                        <field name="priceUnit">
+                            <default-field title="价格单位">
+                                <drop-down>
+                                    <option key="PIECE" text="件"/>
+                                    <option key="SET" text="套"/>
+                                    <option key="KG" text="公斤"/>
+                                    <option key="TON" text="吨"/>
+                                    <option key="METER" text="米"/>
+                                    <option key="LITER" text="升"/>
+                                    <option key="BOX" text="箱"/>
+                                    <option key="PACK" text="包"/>
+                                </drop-down>
+                            </default-field>
+                        </field>
+
+                        <field name="quantity">
+                            <default-field title="库存数量">
+                                <text-line size="20"/>
+                            </default-field>
+                        </field>
+
+                        <field name="minOrderQuantity">
+                            <default-field title="最小起订量">
+                                <text-line size="20"/>
+                            </default-field>
+                        </field>
+
+                        <field name="location">
+                            <default-field title="所在地区">
+                                <text-line size="30"/>
+                            </default-field>
+                        </field>
+
+                        <field name="deliveryMethod">
+                            <default-field title="交付方式">
+                                <drop-down allow-multiple="true">
+                                    <option key="PICKUP" text="自提"/>
+                                    <option key="DELIVERY" text="配送"/>
+                                    <option key="LOGISTICS" text="物流"/>
+                                    <option key="EXPRESS" text="快递"/>
+                                </drop-down>
+                            </default-field>
+                        </field>
+
+                        <field name="deliveryTime">
+                            <default-field title="交付时间" tooltip="如：现货、3-5天、1-2周等">
+                                <text-line size="30"/>
+                            </default-field>
+                        </field>
+
+                        <field name="paymentTerms">
+                            <default-field title="付款方式">
+                                <drop-down allow-multiple="true">
+                                    <option key="CASH" text="现金"/>
+                                    <option key="BANK_TRANSFER" text="银行转账"/>
+                                    <option key="CREDIT" text="赊账"/>
+                                    <option key="INSTALLMENT" text="分期付款"/>
+                                </drop-down>
+                            </default-field>
+                        </field>
+
+                        <field name="contactName">
+                            <default-field title="联系人">
+                                <text-line size="30"/>
+                            </default-field>
+                        </field>
+
+                        <field name="contactPhone">
+                            <default-field title="联系电话">
+                                <text-line size="30"/>
+                            </default-field>
+                        </field>
+
+                        <field name="contactEmail">
+                            <default-field title="联系邮箱">
+                                <text-line size="40"/>
+                            </default-field>
+                        </field>
+
+                        <field name="validFromDate">
+                            <default-field title="有效开始日期">
+                                <date-time type="date"/>
+                            </default-field>
+                        </field>
+
+                        <field name="validThruDate">
+                            <default-field title="有效结束日期">
+                                <date-time type="date"/>
+                            </default-field>
+                        </field>
+
+                        <field name="tags">
+                            <default-field title="标签" tooltip="多个标签请用逗号分隔">
+                                <text-line size="50"/>
+                            </default-field>
+                        </field>
+
+                        <field name="remarks">
+                            <default-field title="备注">
+                                <text-area rows="3" cols="60"/>
+                            </default-field>
+                        </field>
+
+                        <field name="submitButton">
+                            <default-field title="">
+                                <submit text="发布供应"/>
+                            </default-field>
+                        </field>
+                    </form-single>
+                </container>
+            </row-col>
+        </container-row>
+    </widgets>
+</screen>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
+        default-menu-title="供应管理"
+        include-child-content="true" require-authentication="false">
+
+    <parameter name="supplyListingId"/>
+    <parameter name="merchantId"/>
+
+    <subscreens default-item="SupplyList">
+        <subscreens-item name="SupplyList" menu-title="供应列表" location="component://moqui-marketplace/screen/marketplace/Supply/SupplyList.xml"/>
+        <subscreens-item name="CreateSupply" menu-title="发布供应" location="component://moqui-marketplace/screen/marketplace/Supply/CreateSupply.xml"/>
+        <subscreens-item name="EditSupply" menu-title="编辑供应" location="component://moqui-marketplace/screen/marketplace/Supply/EditSupply.xml"/>
+    </subscreens>
+
+    <transition name="createSupply" method="post">
+        <service-call name="marketplace.SupplyDemandServices.create#SupplyListing" in-map="context" out-map="context"/>
+        <default-response url="../Supply/SupplyList" parameter-map="[merchantId:merchantId]"/>
+    </transition>
+
+    <transition name="updateSupply" method="post">
+        <service-call name="marketplace.SupplyDemandServices.update#SupplyListing" in-map="context" out-map="context"/>
+        <default-response url="../Supply/SupplyList" parameter-map="[merchantId:merchantId]"/>
+    </transition>
+
+    <transition name="deleteSupply" method="post">
+        <service-call name="marketplace.SupplyDemandServices.delete#SupplyListing" in-map="context" out-map="context"/>
+        <default-response url="../Supply/SupplyList" parameter-map="[merchantId:merchantId]"/>
+    </transition>
+
+    <actions>
+        <if condition="!merchantId">
+            <set field="merchantId" from="ec.user.userAccount?.partyId ?: 'DEMO_MERCHANT'"/>
+        </if>
+    </actions>
+
+    <widgets>
+        <subscreens-panel id="supply-panel" type="tab"/>
+    </widgets>
+</screen>

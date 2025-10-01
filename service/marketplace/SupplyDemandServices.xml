@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <!-- ==================== 商家统计服务 ==================== -->
+
+    <!-- ==================== 供应管理服务 ==================== -->
+
+    <service verb="create" noun="SupplyListing" authenticate="false">
+        <description>创建供应信息</description>
+        <in-parameters>
+            <parameter name="publisherId" default="DEMO_MERCHANT"/>
+            <parameter name="productName" required="true"/>
+            <parameter name="category" required="true"/>
+            <parameter name="description"/>
+            <parameter name="quantity" required="true"/>
+            <parameter name="price" type="BigDecimal" required="true"/>
+            <parameter name="location"/>
+            <parameter name="contactInfo"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="supplyListingId"/>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="message"/>
+        </out-parameters>
+        <actions>
+            <set field="success" value="true" type="Boolean"/>
+            <script><![CDATA[
+                try {
+                    // 生成供应ID
+                    def timestamp = System.currentTimeMillis()
+                    supplyListingId = "SUPPLY_${timestamp}"
+
+                    // 创建供应记录 - 使用基础实体
+                    ec.artifactExecution.disableAuthz()
+                    try {
+                        def supplyValue = ec.entity.makeValue("marketplace.listing.Listing")
+                            .setFields([
+                                listingId: supplyListingId,
+                                listingType: "SUPPLY",
+                                publisherId: publisherId,
+                                publisherType: "MERCHANT",
+                                title: productName,
+                                description: description ?: "",
+                                category: category,
+                                quantity: quantity ? Double.parseDouble(quantity.toString().replaceAll("[^\\d.]", "")) : 0,
+                                quantityUnit: "斤",
+                                priceMin: price,
+                                priceMax: price,
+                                currencyUomId: "CNY",
+                                locationDesc: location ?: "",
+                                status: "ACTIVE",
+                                createdDate: ec.user.nowTimestamp
+                            ], true, null, false)
+
+                        supplyValue.create()
+                    } finally {
+                        ec.artifactExecution.enableAuthz()
+                    }
+
+                    message = "供应信息创建成功，供应ID: ${supplyListingId}"
+
+                } catch (Exception e) {
+                    ec.logger.error("创建供应信息失败: ${e.message}", e)
+                    success = false
+                    message = "创建供应信息失败: ${e.message}"
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="update" noun="SupplyListing" authenticate="false">
+        <description>更新供应信息</description>
+        <in-parameters>
+            <parameter name="supplyListingId" required="true"/>
+            <parameter name="productName"/>
+            <parameter name="category"/>
+            <parameter name="description"/>
+            <parameter name="quantity"/>
+            <parameter name="price" type="BigDecimal"/>
+            <parameter name="location"/>
+            <parameter name="contactInfo"/>
+            <parameter name="status"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="message"/>
+        </out-parameters>
+        <actions>
+            <set field="success" value="true" type="Boolean"/>
+            <script><![CDATA[
+                try {
+                    def supply = ec.entity.find("marketplace.SupplyListing")
+                        .condition("supplyListingId", supplyListingId)
+                        .one()
+
+                    if (supply) {
+                        def updateFields = [:]
+                        if (productName) updateFields.productName = productName
+                        if (category) updateFields.category = category
+                        if (description != null) updateFields.description = description
+                        if (quantity) updateFields.quantity = quantity
+                        if (price) updateFields.price = price
+                        if (location != null) updateFields.location = location
+                        if (contactInfo != null) updateFields.contactInfo = contactInfo
+                        if (status) updateFields.status = status
+
+                        supply.setFields(updateFields, true, null, false)
+                        supply.update()
+
+                        message = "供应信息更新成功"
+                    } else {
+                        success = false
+                        message = "供应信息不存在"
+                    }
+
+                } catch (Exception e) {
+                    ec.logger.error("更新供应信息失败: ${e.message}", e)
+                    success = false
+                    message = "更新供应信息失败: ${e.message}"
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="delete" noun="SupplyListing" authenticate="false">
+        <description>删除供应信息</description>
+        <in-parameters>
+            <parameter name="supplyListingId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="message"/>
+        </out-parameters>
+        <actions>
+            <set field="success" value="true" type="Boolean"/>
+            <script><![CDATA[
+                try {
+                    def supply = ec.entity.find("marketplace.SupplyListing")
+                        .condition("supplyListingId", supplyListingId)
+                        .one()
+
+                    if (supply) {
+                        supply.delete()
+                        message = "供应信息删除成功"
+                    } else {
+                        success = false
+                        message = "供应信息不存在"
+                    }
+
+                } catch (Exception e) {
+                    ec.logger.error("删除供应信息失败: ${e.message}", e)
+                    success = false
+                    message = "删除供应信息失败: ${e.message}"
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+    <!-- ==================== 需求管理服务 ==================== -->
+
+    <service verb="create" noun="DemandListing" authenticate="false">
+        <description>创建需求信息</description>
+        <in-parameters>
+            <parameter name="publisherId" default="DEMO_MERCHANT"/>
+            <parameter name="productName" required="true"/>
+            <parameter name="category" required="true"/>
+            <parameter name="description"/>
+            <parameter name="quantityNeeded" required="true"/>
+            <parameter name="budgetMax" type="BigDecimal" required="true"/>
+            <parameter name="location"/>
+            <parameter name="contactInfo"/>
+            <parameter name="deadline"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="demandListingId"/>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="message"/>
+        </out-parameters>
+        <actions>
+            <set field="success" value="true" type="Boolean"/>
+            <script><![CDATA[
+                try {
+                    // 生成需求ID
+                    def timestamp = System.currentTimeMillis()
+                    demandListingId = "DEMAND_${timestamp}"
+
+                    // 创建需求记录 - 使用基础实体
+                    ec.artifactExecution.disableAuthz()
+                    try {
+                        def demandValue = ec.entity.makeValue("marketplace.listing.Listing")
+                            .setFields([
+                                listingId: demandListingId,
+                                listingType: "DEMAND",
+                                publisherId: publisherId,
+                                publisherType: "MERCHANT",
+                                title: productName,
+                                description: description ?: "",
+                                category: category,
+                                quantity: quantityNeeded ? Double.parseDouble(quantityNeeded.toString().replaceAll("[^\\d.]", "")) : 0,
+                                quantityUnit: "斤",
+                                priceMin: budgetMax,
+                                priceMax: budgetMax,
+                                currencyUomId: "CNY",
+                                locationDesc: location ?: "",
+                                validThru: deadline,
+                                status: "ACTIVE",
+                                createdDate: ec.user.nowTimestamp
+                            ], true, null, false)
+
+                        demandValue.create()
+                    } finally {
+                        ec.artifactExecution.enableAuthz()
+                    }
+
+                    message = "需求信息创建成功，需求ID: ${demandListingId}"
+
+                } catch (Exception e) {
+                    ec.logger.error("创建需求信息失败: ${e.message}", e)
+                    success = false
+                    message = "创建需求信息失败: ${e.message}"
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="update" noun="DemandListing" authenticate="false">
+        <description>更新需求信息</description>
+        <in-parameters>
+            <parameter name="demandListingId" required="true"/>
+            <parameter name="productName"/>
+            <parameter name="category"/>
+            <parameter name="description"/>
+            <parameter name="quantityNeeded"/>
+            <parameter name="budgetMax" type="BigDecimal"/>
+            <parameter name="location"/>
+            <parameter name="contactInfo"/>
+            <parameter name="deadline"/>
+            <parameter name="status"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="message"/>
+        </out-parameters>
+        <actions>
+            <set field="success" value="true" type="Boolean"/>
+            <script><![CDATA[
+                try {
+                    def demand = ec.entity.find("marketplace.DemandListing")
+                        .condition("demandListingId", demandListingId)
+                        .one()
+
+                    if (demand) {
+                        def updateFields = [:]
+                        if (productName) updateFields.productName = productName
+                        if (category) updateFields.category = category
+                        if (description != null) updateFields.description = description
+                        if (quantityNeeded) updateFields.quantityNeeded = quantityNeeded
+                        if (budgetMax) updateFields.budgetMax = budgetMax
+                        if (location != null) updateFields.location = location
+                        if (contactInfo != null) updateFields.contactInfo = contactInfo
+                        if (deadline) updateFields.deadline = deadline
+                        if (status) updateFields.status = status
+
+                        demand.setFields(updateFields, true, null, false)
+                        demand.update()
+
+                        message = "需求信息更新成功"
+                    } else {
+                        success = false
+                        message = "需求信息不存在"
+                    }
+
+                } catch (Exception e) {
+                    ec.logger.error("更新需求信息失败: ${e.message}", e)
+                    success = false
+                    message = "更新需求信息失败: ${e.message}"
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="delete" noun="DemandListing" authenticate="false">
+        <description>删除需求信息</description>
+        <in-parameters>
+            <parameter name="demandListingId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="message"/>
+        </out-parameters>
+        <actions>
+            <set field="success" value="true" type="Boolean"/>
+            <script><![CDATA[
+                try {
+                    def demand = ec.entity.find("marketplace.DemandListing")
+                        .condition("demandListingId", demandListingId)
+                        .one()
+
+                    if (demand) {
+                        demand.delete()
+                        message = "需求信息删除成功"
+                    } else {
+                        success = false
+                        message = "需求信息不存在"
+                    }
+
+                } catch (Exception e) {
+                    ec.logger.error("删除需求信息失败: ${e.message}", e)
+                    success = false
+                    message = "删除需求信息失败: ${e.message}"
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+
+    <!-- ==================== 供需匹配服务 ==================== -->
+
+    <service verb="find" noun="SupplyDemandMatches">
+        <description>查找供需匹配</description>
+        <in-parameters>
+            <parameter name="merchantId"/>
+            <parameter name="category"/>
+            <parameter name="keyword"/>
+            <parameter name="maxDistance" type="BigDecimal"/>
+            <parameter name="pageIndex" type="Integer" default="0"/>
+            <parameter name="pageSize" type="Integer" default="20"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="matchList" type="List"/>
+            <parameter name="matchListCount" type="Long"/>
+        </out-parameters>
+        <actions>
+            <!-- 实现供需匹配逻辑 -->
+            <set field="matchList" from="[]"/>
+            <set field="matchListCount" value="0" type="Long"/>
+        </actions>
+    </service>
+
+    <!-- ==================== 统计报表服务 ==================== -->
+
+    <service verb="get" noun="DashboardSummary">
+        <description>获取控制台摘要信息</description>
+        <in-parameters>
+            <parameter name="merchantId"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="todayListings" type="Long"/>
+            <parameter name="weeklyMatches" type="Long"/>
+            <parameter name="monthlyRevenue" type="BigDecimal"/>
+            <parameter name="pendingActions" type="Long"/>
+            <parameter name="recentActivities" type="List"/>
+        </out-parameters>
+        <actions>
+            <!-- 设置演示数据 -->
+            <set field="todayListings" value="5" type="Long"/>
+            <set field="weeklyMatches" value="12" type="Long"/>
+            <set field="monthlyRevenue" value="18950.75" type="BigDecimal"/>
+            <set field="pendingActions" value="3" type="Long"/>
+            <set field="recentActivities" from="[]"/>
+        </actions>
+    </service>
+
+</services>

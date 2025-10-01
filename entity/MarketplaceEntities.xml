@@ -79,14 +79,15 @@
         <!-- 审计字段 -->
         <field name="createdDate" type="date-time"/>
         <field name="createdByUserId" type="id"/>
-        <field name="lastUpdatedStamp" type="date-time"/>
 
         <relationship type="one" related="mantle.party.Party" short-alias="publisher">
             <key-map field-name="publisherId" related="partyId"/>
         </relationship>
+        <!-- Temporarily comment out GeoPoint relationship until proper entity is found
         <relationship type="one" related="mantle.humanres.position.GeoPoint" short-alias="geoPoint">
             <key-map field-name="geoPointId"/>
         </relationship>
+        -->
 
         <index name="LISTING_TYPE_STATUS" unique="false">
             <index-field name="listingType"/>
@@ -100,6 +101,33 @@
             <index-field name="validThru"/>
         </index>
     </entity>
+
+    <!-- ==================== 兼容性视图 ==================== -->
+
+    <!-- 为了兼容性，创建 SupplyListing 视图 -->
+    <view-entity entity-name="SupplyListing" package="marketplace">
+        <member-entity entity-alias="listing" entity-name="marketplace.listing.Listing"/>
+        <alias-all entity-alias="listing"/>
+        <condition>
+            <condition-expr entity-alias="listing" field-name="listingType" operator="equals" value="SUPPLY"/>
+        </condition>
+    </view-entity>
+
+    <!-- 为了兼容性，创建 DemandListing 视图 -->
+    <view-entity entity-name="DemandListing" package="marketplace">
+        <member-entity entity-alias="listing" entity-name="marketplace.listing.Listing"/>
+        <alias-all entity-alias="listing"/>
+        <condition>
+            <condition-expr entity-alias="listing" field-name="listingType" operator="equals" value="DEMAND"/>
+        </condition>
+    </view-entity>
+
+    <!-- 为了兼容性，创建 MatchResult 视图 -->
+    <view-entity entity-name="MatchResult" package="marketplace">
+        <member-entity entity-alias="match" entity-name="marketplace.match.Match"/>
+        <alias-all entity-alias="match"/>
+        <alias name="matchDate" entity-alias="match" field="suggestedDate"/>
+    </view-entity>
 
     <!-- ==================== 标签系统 ==================== -->
 
@@ -368,14 +396,15 @@
 
         <!-- 审计 -->
         <field name="createdDate" type="date-time"/>
-        <field name="lastUpdatedStamp" type="date-time"/>
 
         <relationship type="one" related="mantle.party.Party" short-alias="party">
             <key-map field-name="partyId"/>
         </relationship>
+        <!-- Temporarily comment out GeoPoint relationship until proper entity is found
         <relationship type="one" related="mantle.humanres.position.GeoPoint" short-alias="preferredGeoPoint">
             <key-map field-name="preferredGeoPointId" related="geoPointId"/>
         </relationship>
+        -->
     </entity>
 
     <entity entity-name="UserBehavior" package="marketplace.profile">

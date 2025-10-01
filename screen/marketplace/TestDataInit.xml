@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
+        default-menu-title="数据管理" require-authentication="false">
+
+    <transition name="initDemoData" method="post">
+        <actions>
+            <service-call name="marketplace.initialize#DemoData" in-map="context" out-map="context"/>
+            <if condition="context.success">
+                <message>演示数据初始化成功！创建了 ${context.suppliesCreated ?: 0} 个供应信息和 ${context.demandsCreated ?: 0} 个需求信息</message>
+            <else>
+                <message error="true">${context.message ?: '初始化失败'}</message>
+            </else></if>
+        </actions>
+        <default-response url="."/>
+    </transition>
+
+    <transition name="runMatching" method="post">
+        <actions>
+            <service-call name="marketplace.process#AllMatching" in-map="context" out-map="context"/>
+            <if condition="context.success">
+                <message>智能匹配完成！共发现 ${context.totalMatches ?: 0} 个匹配结果</message>
+            <else>
+                <message error="true">${context.error ?: '匹配过程发生错误'}</message>
+            </else></if>
+        </actions>
+        <default-response url="."/>
+    </transition>
+
+    <widgets>
+        <container-row>
+            <row-col lg="12">
+                <label text="智能供需平台 - 数据管理测试" type="h1"/>
+
+                <!-- Data Initialization -->
+                <container style="card">
+                    <label text="演示数据管理" type="h3"/>
+                    <form-single name="InitDataForm" transition="initDemoData">
+                        <field name="reset">
+                            <default-field title="重置现有数据">
+                                <check><option key="true" text="是"/></check>
+                            </default-field>
+                        </field>
+                        <field name="submitButton">
+                            <default-field title="">
+                                <submit text="初始化演示数据"/>
+                            </default-field>
+                        </field>
+                    </form-single>
+                </container>
+
+                <!-- Matching Test -->
+                <container style="card">
+                    <label text="智能匹配测试" type="h3"/>
+                    <form-single name="MatchingTestForm" transition="runMatching">
+                        <field name="merchantId">
+                            <default-field title="商家ID">
+                                <text-line default-value="DEMO_MERCHANT"/>
+                            </default-field>
+                        </field>
+                        <field name="minScore">
+                            <default-field title="最低匹配度">
+                                <text-line default-value="0.6"/>
+                            </default-field>
+                        </field>
+                        <field name="maxResults">
+                            <default-field title="最大结果数">
+                                <text-line default-value="50"/>
+                            </default-field>
+                        </field>
+                        <field name="submitButton">
+                            <default-field title="">
+                                <submit text="运行智能匹配"/>
+                            </default-field>
+                        </field>
+                    </form-single>
+                </container>
+
+                <!-- Database Query Test -->
+                <container style="card">
+                    <label text="数据库状态" type="h3"/>
+                    <script><![CDATA[
+                        try {
+                            supplyCount = ec.entity.find("marketplace.SupplyListing").disableAuthz().count()
+                            demandCount = ec.entity.find("marketplace.DemandListing").disableAuthz().count()
+                            matchCount = ec.entity.find("marketplace.match.Match").disableAuthz().count()
+                        } catch (Exception e) {
+                            ec.logger.warn("Database query error: ${e.message}")
+                            supplyCount = "查询失败"
+                            demandCount = "查询失败"
+                            matchCount = "查询失败"
+                        }
+                    ]]></script>
+                    <label text="供应信息数量: ${supplyCount}" type="p"/>
+                    <label text="需求信息数量: ${demandCount}" type="p"/>
+                    <label text="匹配记录数量: ${matchCount}" type="p"/>
+                </container>
+
+                <!-- Quick Actions -->
+                <container style="card">
+                    <label text="快速操作" type="h3"/>
+                    <container-row>
+                        <row-col lg="3">
+                            <link url="../Dashboard" text="返回控制台" btn-type="primary"/>
+                        </row-col>
+                        <row-col lg="3">
+                            <link url="../Matching" text="查看匹配页面" btn-type="success"/>
+                        </row-col>
+                        <row-col lg="3">
+                            <link url="../Demand" text="需求管理" btn-type="info"/>
+                        </row-col>
+                        <row-col lg="3">
+                            <link url="../Chat" text="AI助手" btn-type="warning"/>
+                        </row-col>
+                    </container-row>
+                </container>
+            </row-col>
+        </container-row>
+    </widgets>
+</screen>

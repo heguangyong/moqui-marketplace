@@ -5,20 +5,41 @@
 
 apply plugin: 'groovy'
 
-version = '1.0.0'
+def componentNode = parseComponent(project)
+version = componentNode.'@version'
+def jarBaseName = componentNode.'@name'
+def moquiDir = projectDir.parentFile.parentFile.parentFile
+def frameworkDir = file(moquiDir.absolutePath + '/framework')
+
+repositories {
+    flatDir name: 'localLib', dirs: frameworkDir.absolutePath + '/lib'
+    flatDir name: 'librepo', dirs: projectDir.absolutePath + '/librepo'
+    mavenCentral()
+}
+
+// Log4J has annotation processors, disable to avoid warning
+tasks.withType(JavaCompile) {
+    options.compilerArgs << "-proc:none"
+    options.encoding = 'UTF-8'
+}
+tasks.withType(GroovyCompile) {
+    options.compilerArgs << "-proc:none"
+}
 
 dependencies {
     implementation project(':framework')
-    implementation project(':runtime:component:mantle-udm')
-    implementation project(':runtime:component:mantle-usl')
+    // Note: mantle-udm and mantle-usl dependencies are handled by component.xml
 }
 
-tasks.withType(JavaCompile) {
-    options.encoding = 'UTF-8'
-    options.compilerArgs << '-Xlint:unchecked' << '-Xlint:deprecation'
-}
+// by default the Java plugin runs test on build, change to not do that (only run test if explicit task)
+check.dependsOn.clear()
+
+task cleanLib(type: Delete) { delete fileTree(dir: projectDir.absolutePath+'/lib', include: '*') }
+clean.dependsOn cleanLib
 
 jar {
+    destinationDirectory = file(projectDir.absolutePath + '/lib')
+    archiveBaseName = jarBaseName
     manifest {
         attributes(
             'Implementation-Title': 'Moqui Marketplace Component',
@@ -26,3 +47,14 @@ jar {
         )
     }
 }
+
+task copyDependencies { doLast {
+    copy {
+        from (configurations.runtimeClasspath - project(':framework').configurations.runtimeClasspath - project(':framework').jar.archiveFile)
+        into file(projectDir.absolutePath + '/lib')
+        exclude '**/moqui-framework*.jar'
+        exclude '**/moqui-util*.jar'
+    }
+} }
+copyDependencies.dependsOn cleanLib
+jar.dependsOn copyDependencies

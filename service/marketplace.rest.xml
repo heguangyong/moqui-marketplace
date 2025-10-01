@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resource xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/rest-api-3.xsd"
+          name="marketplace" displayName="Marketplace API" require-authentication="anonymous-view">
+
+    <description>AI驱动的社区商业撮合平台 REST API</description>
+
+    <!-- 供需信息管理 -->
+    <resource name="listing">
+        <method type="post">
+            <service name="marketplace.MarketplaceServices.create#Listing"/>
+        </method>
+        <method type="get">
+            <service name="marketplace.MarketplaceServices.search#Listings"/>
+        </method>
+
+        <resource name="{listingId}">
+            <method type="get">
+                <entity name="marketplace.listing.Listing" operation="one"/>
+            </method>
+            <method type="put">
+                <service name="marketplace.MarketplaceServices.update#Listing"/>
+            </method>
+            <method type="delete">
+                <service name="marketplace.MarketplaceServices.delete#Listing"/>
+            </method>
+        </resource>
+    </resource>
+
+    <!-- 智能匹配 -->
+    <resource name="match">
+        <resource name="find">
+            <method type="post">
+                <service name="marketplace.MarketplaceServices.find#Matches"/>
+            </method>
+        </resource>
+
+        <resource name="confirm">
+            <method type="post">
+                <service name="marketplace.MarketplaceServices.confirm#Match"/>
+            </method>
+        </resource>
+
+        <resource name="{matchId}">
+            <method type="get">
+                <entity name="marketplace.matching.Match" operation="one"/>
+            </method>
+        </resource>
+    </resource>
+
+    <!-- 订单管理 -->
+    <resource name="order">
+        <method type="post">
+            <service name="marketplace.MarketplaceServices.create#MatchOrder"/>
+        </method>
+        <method type="get">
+            <service name="marketplace.MarketplaceServices.search#MatchOrders"/>
+        </method>
+
+        <resource name="{orderId}">
+            <method type="get">
+                <entity name="marketplace.order.MatchOrder" operation="one"/>
+            </method>
+            <method type="put">
+                <service name="marketplace.MarketplaceServices.update#MatchOrder"/>
+            </method>
+        </resource>
+
+        <resource name="{orderId}/rate">
+            <method type="post">
+                <service name="marketplace.MarketplaceServices.rate#MatchOrder"/>
+            </method>
+        </resource>
+    </resource>
+
+    <!-- 用户画像 -->
+    <resource name="profile">
+        <resource name="{partyId}">
+            <method type="get">
+                <service name="marketplace.MarketplaceServices.get#UserProfile"/>
+            </method>
+        </resource>
+
+        <resource name="{partyId}/behavior">
+            <method type="post">
+                <service name="marketplace.MarketplaceServices.record#UserBehavior"/>
+            </method>
+        </resource>
+
+        <resource name="{partyId}/rebuild">
+            <method type="post">
+                <service name="marketplace.MarketplaceServices.rebuild#UserProfile"/>
+            </method>
+        </resource>
+    </resource>
+
+    <!-- 标签管理 -->
+    <resource name="tag">
+        <method type="get">
+            <service name="marketplace.MarketplaceServices.search#Tags"/>
+        </method>
+
+        <resource name="extract">
+            <method type="post">
+                <service name="marketplace.MarketplaceServices.extract#TagsFromText"/>
+            </method>
+        </resource>
+    </resource>
+
+    <!-- 图片上传 -->
+    <resource name="image">
+        <method type="post">
+            <service name="marketplace.MarketplaceServices.upload#Image"/>
+        </method>
+    </resource>
+
+    <!-- 统计信息 -->
+    <resource name="stats">
+        <method type="get">
+            <service name="marketplace.get#MerchantStatistics"/>
+        </method>
+
+        <resource name="matching">
+            <method type="get">
+                <service name="marketplace.get#MatchingStats"/>
+            </method>
+        </resource>
+    </resource>
+
+</resource>

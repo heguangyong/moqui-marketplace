@@ -42,32 +42,32 @@
     </default-property>
 
     <!-- Rocket.Chat 集成配置 -->
-    <default-property name="rocketchat.server.url" value="${ROCKETCHAT_URL:http://localhost:3000}">
+    <default-property name="rocketchat.server.url" value="http://localhost:4000">
         <description>Rocket.Chat服务器地址</description>
     </default-property>
 
-    <default-property name="rocketchat.bot.username" value="${ROCKETCHAT_BOT_USER:marketplace-bot}">
+    <default-property name="rocketchat.bot.username" value="marketplace-bot">
         <description>Rocket.Chat Bot用户名</description>
     </default-property>
 
-    <default-property name="rocketchat.bot.password" value="${ROCKETCHAT_BOT_PASS:}">
+    <default-property name="rocketchat.bot.password" value="">
         <description>Rocket.Chat Bot密码</description>
     </default-property>
 
-    <default-property name="rocketchat.webhook.token" value="${ROCKETCHAT_WEBHOOK_TOKEN:}">
+    <default-property name="rocketchat.webhook.token" value="">
         <description>Rocket.Chat Webhook Token</description>
     </default-property>
 
     <!-- MCP Server 配置 -->
-    <default-property name="mcp.server.host" value="${MCP_SERVER_HOST:localhost}">
+    <default-property name="mcp.server.host" value="localhost">
         <description>MCP Server主机地址</description>
     </default-property>
 
-    <default-property name="mcp.server.port" value="${MCP_SERVER_PORT:3001}">
+    <default-property name="mcp.server.port" value="3001">
         <description>MCP Server端口</description>
     </default-property>
 
-    <default-property name="mcp.server.enable" value="${MCP_SERVER_ENABLE:true}">
+    <default-property name="mcp.server.enable" value="true">
         <description>是否启用MCP Server</description>
     </default-property>
 

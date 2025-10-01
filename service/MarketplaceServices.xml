@@ -352,4 +352,69 @@
         </actions>
     </service>
 
+    <!-- ==================== 商家统计服务 ==================== -->
+
+    <service verb="get" noun="MerchantStatistics">
+        <description>获取商家统计数据</description>
+        <in-parameters>
+            <parameter name="merchantId"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="totalSupplyListings" type="Long"/>
+            <parameter name="activeSupplyListings" type="Long"/>
+            <parameter name="totalDemandListings" type="Long"/>
+            <parameter name="activeDemandListings" type="Long"/>
+            <parameter name="totalMatches" type="Long"/>
+            <parameter name="pendingMatches" type="Long"/>
+            <parameter name="completedTransactions" type="Long"/>
+            <parameter name="totalRevenue" type="BigDecimal"/>
+            <parameter name="averageRating" type="BigDecimal"/>
+            <parameter name="totalReviews" type="Long"/>
+        </out-parameters>
+        <actions>
+            <!-- 如果没有指定merchantId，使用默认的演示商家 -->
+            <if condition="!merchantId">
+                <set field="merchantId" value="DEMO_MERCHANT"/>
+            </if>
+
+            <!-- 统计供应信息 -->
+            <entity-count entity-name="marketplace.SupplyListing" count-field="totalSupplyListings">
+                <condition-expr field-name="merchantId" operator="equals" from="merchantId"/>
+            </entity-count>
+
+            <entity-count entity-name="marketplace.SupplyListing" count-field="activeSupplyListings">
+                <condition-list>
+                    <condition-expr field-name="merchantId" operator="equals" from="merchantId"/>
+                    <condition-expr field-name="status" operator="equals" value="ACTIVE"/>
+                </condition-list>
+            </entity-count>
+
+            <!-- 统计需求信息 -->
+            <entity-count entity-name="marketplace.DemandListing" count-field="totalDemandListings">
+                <condition-expr field-name="merchantId" operator="equals" from="merchantId"/>
+            </entity-count>
+
+            <entity-count entity-name="marketplace.DemandListing" count-field="activeDemandListings">
+                <condition-list>
+                    <condition-expr field-name="merchantId" operator="equals" from="merchantId"/>
+                    <condition-expr field-name="status" operator="equals" value="ACTIVE"/>
+                </condition-list>
+            </entity-count>
+
+            <!-- 设置默认统计数据 -->
+            <if condition="!totalSupplyListings"><set field="totalSupplyListings" value="0" type="Long"/></if>
+            <if condition="!activeSupplyListings"><set field="activeSupplyListings" value="0" type="Long"/></if>
+            <if condition="!totalDemandListings"><set field="totalDemandListings" value="0" type="Long"/></if>
+            <if condition="!activeDemandListings"><set field="activeDemandListings" value="0" type="Long"/></if>
+
+            <!-- 其他统计数据 - 演示数据 -->
+            <set field="totalMatches" value="15" type="Long"/>
+            <set field="pendingMatches" value="3" type="Long"/>
+            <set field="completedTransactions" value="12" type="Long"/>
+            <set field="totalRevenue" value="45680.50" type="BigDecimal"/>
+            <set field="averageRating" value="4.3" type="BigDecimal"/>
+            <set field="totalReviews" value="28" type="Long"/>
+        </actions>
+    </service>
+
 </services>

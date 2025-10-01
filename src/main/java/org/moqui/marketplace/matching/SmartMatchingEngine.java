@@ -394,9 +394,9 @@ public class SmartMatchingEngine {
                 reason.append("商家信用良好；");
             }
 
-            Integer totalOrders = publisherProfile.getInteger("totalOrders");
-            if (totalOrders != null && totalOrders > 5) {
-                reason.append(String.format("已完成%d笔交易", totalOrders));
+            Long totalOrdersLong = publisherProfile.getLong("totalOrders");
+            if (totalOrdersLong != null && totalOrdersLong > 5) {
+                reason.append(String.format("已完成%d笔交易", totalOrdersLong));
             }
         }
 
