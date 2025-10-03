@@ -127,10 +127,132 @@
     </actions>
 
     <widgets>
+        <!-- Rocket.Chat LiveChat集成 -->
+        <render-mode>
+            <text type="html"><![CDATA[
+                <script type="text/javascript">
+                  (function(w, d, s, u) {
+                    w.RocketChat = function(c) { w.RocketChat._.push(c) };
+                    w.RocketChat._ = [];
+                    w.RocketChat.url = u;
+                    var h = d.getElementsByTagName(s)[0],
+                        j = d.createElement(s);
+                    j.async = true;
+                    j.src = u + "/livechat/rocketchat-livechat.min.js?_=1";
+                    h.parentNode.insertBefore(j, h);
+                  })(window, document, "script", "http://localhost:4000");
+
+                  // 自定义配置
+                  window.RocketChat(function() {
+                    try {
+                      // 设置用户信息
+                      RocketChat.livechat.setCustomField('merchantId', '${merchantId}');
+                      RocketChat.livechat.setCustomField('platform', 'marketplace');
+
+                      // 设置欢迎消息
+                      RocketChat.livechat.setGuestName('商家-${merchantId}');
+                      RocketChat.livechat.setGuestEmail('${merchantId}@marketplace.demo');
+
+                      // 监听聊天消息，集成到MCP AI引擎
+                      RocketChat.livechat.onChatMessage(function(data) {
+                        console.log('LiveChat message received:', data);
+
+                        // 调用MCP AI引擎处理消息
+                        if (data.msg && data.msg.trim()) {
+                          processWithMcpAi(data.msg, '${merchantId}');
+                        }
+                      });
+
+                      // 自定义聊天窗口样式
+                      RocketChat.livechat.setTheme({
+                        color: '#007bff',
+                        fontColor: '#ffffff',
+                        iconColor: '#ffffff'
+                      });
+
+                      console.log('Rocket.Chat LiveChat initialized successfully');
+                    } catch (e) {
+                      console.error('Error initializing Rocket.Chat LiveChat:', e);
+                    }
+                  });
+
+                  // 集成MCP AI引擎处理函数
+                  function processWithMcpAi(message, merchantId) {
+                    try {
+                      // 生成会话ID
+                      var sessionId = 'LIVECHAT_' + merchantId + '_' + Date.now();
+
+                      // 调用MCP AI服务
+                      fetch('/rest/s1/mcp/marketplace-chat', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                          sessionId: sessionId,
+                          merchantId: merchantId,
+                          message: message
+                        })
+                      })
+                      .then(response => response.json())
+                      .then(data => {
+                        if (data.aiResponse) {
+                          // 发送AI响应到Rocket.Chat
+                          sendAiResponseToRocketChat(data.aiResponse);
+                        }
+                      })
+                      .catch(error => {
+                        console.error('Error calling MCP AI engine:', error);
+                      });
+                    } catch (e) {
+                      console.error('Error in processWithMcpAi:', e);
+                    }
+                  }
+
+                  // 发送AI响应到Rocket.Chat
+                  function sendAiResponseToRocketChat(aiResponse) {
+                    try {
+                      // 通过Rocket.Chat API发送消息
+                      RocketChat.livechat.sendMessage(aiResponse);
+                    } catch (e) {
+                      console.error('Error sending AI response to Rocket.Chat:', e);
+                    }
+                  }
+                </script>
+
+                <style>
+                  /* 自定义LiveChat样式 */
+                  .livechat-container {
+                    z-index: 9999 !important;
+                  }
+
+                  .livechat-widget {
+                    bottom: 20px !important;
+                    right: 20px !important;
+                  }
+
+                  .livechat-badge {
+                    background-color: #007bff !important;
+                    border-radius: 50% !important;
+                    box-shadow: 0 2px 8px rgba(0,123,255,0.3) !important;
+                  }
+
+                  .livechat-badge:hover {
+                    background-color: #0056b3 !important;
+                    transform: scale(1.1) !important;
+                    transition: all 0.3s ease !important;
+                  }
+                </style>
+            ]]></text>
+        </render-mode>
+
         <container-row>
             <row-col lg="12">
                 <label text="智能供需平台 - 商家控制台" type="h1"/>
                 <label text="商家ID: ${merchantId}" type="h4"/>
+                <container style="alert alert-info">
+                    <label text="💬 智能AI助手已启用！点击右下角聊天图标即可开始对话"/>
+                </container>
             </row-col>
         </container-row>
 

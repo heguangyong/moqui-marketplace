@@ -48,6 +48,30 @@
     <moqui.security.ArtifactGroupMember artifactGroupId="MARKETPLACE_APP" artifactTypeEnumId="AT_SERVICE"
             inheritAuthz="Y" artifactName="moqui.mcp.*"/>
 
+    <!-- Add MCP dialog entities to the group -->
+    <moqui.security.ArtifactGroupMember artifactGroupId="MARKETPLACE_APP" artifactTypeEnumId="AT_ENTITY"
+            inheritAuthz="Y" artifactName="mcp.dialog.McpDialogSession"/>
+    <moqui.security.ArtifactGroupMember artifactGroupId="MARKETPLACE_APP" artifactTypeEnumId="AT_ENTITY"
+            inheritAuthz="Y" artifactName="mcp.dialog.McpDialogMessage"/>
+    <moqui.security.ArtifactGroupMember artifactGroupId="MARKETPLACE_APP" artifactTypeEnumId="AT_ENTITY"
+            inheritAuthz="Y" artifactName="mcp.*"/>
+
+    <!-- Explicit MCP entity permissions for anonymous users -->
+    <moqui.security.ArtifactAuthz artifactAuthzId="MCP_DIALOG_SESSION_AUTHZ_ANONYMOUS" userGroupId="_NA_"
+            artifactTypeEnumId="AT_ENTITY" artifactName="mcp.dialog.McpDialogSession"
+            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
+    <moqui.security.ArtifactAuthz artifactAuthzId="MCP_DIALOG_MESSAGE_AUTHZ_ANONYMOUS" userGroupId="_NA_"
+            artifactTypeEnumId="AT_ENTITY" artifactName="mcp.dialog.McpDialogMessage"
+            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
+
+    <!-- Explicit MCP entity permissions for all users -->
+    <moqui.security.ArtifactAuthz artifactAuthzId="MCP_DIALOG_SESSION_AUTHZ_ALL" userGroupId="ALL_USERS"
+            artifactTypeEnumId="AT_ENTITY" artifactName="mcp.dialog.McpDialogSession"
+            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
+    <moqui.security.ArtifactAuthz artifactAuthzId="MCP_DIALOG_MESSAGE_AUTHZ_ALL" userGroupId="ALL_USERS"
+            artifactTypeEnumId="AT_ENTITY" artifactName="mcp.dialog.McpDialogMessage"
+            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
+
     <!-- Marketplace Entities Group -->
     <moqui.security.ArtifactGroup artifactGroupId="MARKETPLACE_ENTITIES" description="Marketplace Entities"/>
     <moqui.security.ArtifactGroupMember artifactGroupId="MARKETPLACE_ENTITIES" artifactTypeEnumId="AT_ENTITY"

@@ -3,256 +3,139 @@
         xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
         default-menu-title="AI助手" require-authentication="false">
 
-    <parameter name="sessionId"/>
     <parameter name="merchantId"/>
 
-    <transition name="sendMessage" method="post">
-        <actions>
-            <service-call name="moqui.mcp.chat#Message" in-map="context" out-map="context"/>
-            <if condition="context.error">
-                <message error="true" message="${context.error}"/>
-            </if>
-            <if condition="context.aiResponse">
-                <message message="AI助手: ${context.aiResponse}"/>
-            </if>
-        </actions>
-        <default-response url="." parameter-map="[sessionId:sessionId, merchantId:merchantId]"/>
-    </transition>
-
-    <transition name="createSession" method="post">
-        <actions>
-            <service-call name="moqui.mcp.create#MarketplaceSession" in-map="context" out-map="context"/>
-            <if condition="context.sessionId &amp;&amp; context.status == 'success'">
-                <service-call name="moqui.mcp.get#MarketplaceSession" in-map="[sessionId:context.sessionId]" out-map="sessionInfo"/>
-                <set field="session" from="sessionInfo.session"/>
-            </if>
-        </actions>
-        <default-response url="." parameter-map="[sessionId:sessionId, merchantId:merchantId]"/>
-    </transition>
-
-    <transition name="getRecommendations" method="post">
-        <actions>
-            <service-call name="moqui.mcp.get#SmartRecommendations" in-map="context" out-map="recommendations"/>
-        </actions>
-        <default-response url="." parameter-map="[sessionId:sessionId, merchantId:merchantId]"/>
-    </transition>
-
     <actions>
+        <!-- 获取当前商家信息 -->
         <if condition="!merchantId">
             <set field="merchantId" from="ec.user.userAccount?.partyId ?: 'DEMO_MERCHANT'"/>
         </if>
 
-        <!-- 如果有会话ID，获取会话和对话历史 -->
-        <set field="session" value="null"/>
-        <set field="recentMessages" from="[]"/>
-        <if condition="sessionId">
-            <service-call name="moqui.mcp.get#MarketplaceSession" in-map="[sessionId:sessionId]" out-map="sessionInfo" ignore-error="true"/>
-            <set field="session" from="sessionInfo.session"/>
-            <set field="recentMessages" from="sessionInfo.recentMessages ?: []"/>
-        </if>
+        <!-- 生成唯一会话ID -->
+        <set field="sessionId" value="LIVECHAT_${System.currentTimeMillis()}_${merchantId}"/>
 
-        <!-- 获取智能推荐 -->
+        <!-- 获取智能推荐数据 -->
         <service-call name="moqui.mcp.get#SmartRecommendations"
-                      in-map="[merchantId:merchantId, maxResults:3]"
+                      in-map="[merchantId:merchantId, maxResults:4]"
                       out-map="smartRecs"
                       ignore-error="true"/>
         <if condition="!smartRecs.recommendations">
-            <!-- 提供模拟推荐数据 -->
             <set field="smartRecs.recommendations" from="[
                 [title: '高质量钢材供应商推荐', description: '基于您的历史需求，为您推荐优质钢材供应商', score: 0.92],
                 [title: '建材采购需求匹配', description: '发现3个与您供应能力匹配的建材采购需求', score: 0.88],
-                [title: '物流优化建议', description: '基于地理位置分析，推荐最优配送路线', score: 0.85]
+                [title: '物流优化建议', description: '基于地理位置分析，推荐最优配送路线', score: 0.85],
+                [title: '市场趋势分析', description: '本月钢材市场价格上涨，建议及时调整策略', score: 0.80]
             ]"/>
         </if>
     </actions>
 
     <widgets>
-        <!-- Include JWT Authentication Manager -->
+        <!-- 传递配置参数给客户端脚本 -->
         <render-mode>
             <text type="html"><![CDATA[
-                <script src="/mcp-includes/JwtAuth.js"></script>
+                <script type="text/javascript">
+                  // 传递服务器端参数给客户端脚本
+                  window.marketplaceChatConfig = {
+                    merchantId: '${merchantId}',
+                    sessionId: '${sessionId}'
+                  };
+                </script>
             ]]></text>
         </render-mode>
 
-        <container-row>
-            <row-col lg="8" md="10" sm="12">
-                <container>
-                    <label text="智能供需匹配助手" type="h1"/>
-                    <label text="让AI帮您分析市场，匹配供需，优化策略" type="p"/>
+        <container style="ai-assistant-container">
+            <!-- 英雄区域 -->
+            <container style="hero-section">
+                <label text="🤖 智能AI助手" type="h1" style="margin: 0; font-size: 2.5em;"/>
+                <label text="基于Rocket.Chat的统一聊天平台" type="h3" style="margin: 10px 0; opacity: 0.9;"/>
+                <label text="商家ID: ${merchantId} | 会话: ${sessionId}" type="p" style="margin: 0; opacity: 0.8; font-size: 0.9em;"/>
+            </container>
 
-                    <!-- 会话创建区域 -->
-                    <section name="CreateSessionSection">
-                        <condition><expression>!sessionId</expression></condition>
-                        <widgets>
-                            <container style="card">
-                                <label text="开始新的对话会话" type="h4"/>
-                                <form-single name="CreateSessionForm" transition="createSession">
-                                    <field name="merchantId"><default-field><hidden/></default-field></field>
-                                    <field name="initialContext">
-                                        <default-field title="请描述您的需求">
-                                            <text-area rows="3" cols="80" placeholder="例如：我想发布钢材供应信息，寻找合适的采购商..."/>
-                                        </default-field>
-                                    </field>
-                                    <field name="submitButton">
-                                        <default-field title="">
-                                            <submit text="开始AI对话"/>
-                                        </default-field>
-                                    </field>
-                                </form-single>
-                            </container>
-                        </widgets>
-                    </section>
+            <!-- 状态卡片 -->
+            <container-row>
+                <row-col lg="6" md="12">
+                    <container style="status-card">
+                        <label text="📡 LiveChat连接状态" type="h4"/>
+                        <container-row>
+                            <row-col lg="6">
+                                <label text="状态: "/>
+                                <span id="livechat-status" class="status-disconnected">连接中...</span>
+                            </row-col>
+                            <row-col lg="6">
+                                <button class="livechat-button" onclick="openLiveChat()">💬 打开聊天</button>
+                            </row-col>
+                        </container-row>
+                    </container>
+                </row-col>
+                <row-col lg="6" md="12">
+                    <container style="status-card">
+                        <label text="🎯 使用指南" type="h4"/>
+                        <label text="1. 等待右下角出现聊天图标"/>
+                        <label text="2. 点击图标开始与AI对话"/>
+                        <label text="3. AI会自动处理您的询问"/>
+                        <label text="4. 支持供需匹配、市场分析等"/>
+                    </container>
+                </row-col>
+            </container-row>
 
-                    <!-- AI对话界面 -->
-                    <section name="ChatSection">
-                        <condition><expression>sessionId</expression></condition>
-                        <widgets>
-                            <!-- 会话状态 -->
-                            <container style="card">
-                                <container-row>
-                                    <row-col lg="6">
-                                        <label text="会话ID: ${sessionId}"/>
-                                    </row-col>
-                                    <row-col lg="6">
-                                        <label text="状态: ${session?.status ?: 'ACTIVE'}"/>
-                                    </row-col>
-                                </container-row>
-                            </container>
-
-                            <!-- 对话历史 -->
-                            <container style="card">
-                                <label text="对话历史" type="h4"/>
-                                <section name="MessagesSection">
-                                    <condition><expression>recentMessages</expression></condition>
-                                    <widgets>
-                                        <section-iterate name="MessageHistory" list="recentMessages" entry="message">
-                                            <widgets>
-                                                <container style="message-container">
-                                                    <!-- 用户消息 -->
-                                                    <container style="user-message">
-                                                        <label text="您: ${message.message}" style="font-weight: bold;"/>
-                                                    </container>
-                                                    <!-- AI响应 -->
-                                                    <container style="ai-message">
-                                                        <label text="AI助手: ${message.aiResponse}"/>
-                                                    </container>
-                                                    <hr/>
-                                                </container>
-                                            </widgets>
-                                        </section-iterate>
-                                    </widgets>
-                                </section>
-                            </container>
-
-                            <!-- 消息输入 -->
-                            <container style="card">
-                                <label text="发送消息" type="h4"/>
-                                <form-single name="ChatForm" transition="sendMessage">
-                                    <field name="sessionId"><default-field><hidden/></default-field></field>
-                                    <field name="merchantId"><default-field><hidden/></default-field></field>
-                                    <field name="message">
-                                        <default-field title="您的消息">
-                                            <text-area rows="4" cols="80" placeholder="请输入您想咨询的问题..."/>
-                                        </default-field>
-                                    </field>
-                                    <field name="submitButton">
-                                        <default-field title="">
-                                            <submit text="发送"/>
-                                        </default-field>
-                                    </field>
-                                </form-single>
-                            </container>
-                        </widgets>
-                    </section>
+            <!-- 功能特性 -->
+            <container style="feature-grid">
+                <container style="feature-item">
+                    <div style="feature-icon">🎯</div>
+                    <label text="智能匹配" type="h5"/>
+                    <label text="AI自动分析供需信息，找到最佳匹配"/>
                 </container>
-            </row-col>
-
-            <!-- 智能推荐侧边栏 -->
-            <row-col lg="4" md="12">
-                <container style="card">
-                    <label text="智能推荐" type="h4"/>
-
-                    <!-- 快速操作 -->
-                    <section name="QuickActionsSection">
-                        <condition><expression>sessionId</expression></condition>
-                        <widgets>
-                            <container>
-                                <label text="快速操作" type="h5"/>
-                                <container-row>
-                                    <row-col lg="12">
-                                        <form-single name="QuickActionsForm" transition="sendMessage" focus-field="message">
-                                            <field name="sessionId"><default-field><hidden/></default-field></field>
-                                            <field name="merchantId"><default-field><hidden/></default-field></field>
-                                            <field name="message"><default-field><hidden default-value="我想发布供应信息"/></default-field></field>
-                                            <field name="quickAction1">
-                                                <default-field title="">
-                                                    <submit text="发布供应" btn-type="primary"/>
-                                                </default-field>
-                                            </field>
-                                        </form-single>
-                                    </row-col>
-                                </container-row>
-                                <container-row>
-                                    <row-col lg="12">
-                                        <form-single name="QuickActions2Form" transition="sendMessage">
-                                            <field name="sessionId"><default-field><hidden/></default-field></field>
-                                            <field name="merchantId"><default-field><hidden/></default-field></field>
-                                            <field name="message"><default-field><hidden default-value="我想发布需求信息"/></default-field></field>
-                                            <field name="quickAction2">
-                                                <default-field title="">
-                                                    <submit text="发布需求" btn-type="info"/>
-                                                </default-field>
-                                            </field>
-                                        </form-single>
-                                    </row-col>
-                                </container-row>
-                                <container-row>
-                                    <row-col lg="12">
-                                        <form-single name="QuickActions3Form" transition="sendMessage">
-                                            <field name="sessionId"><default-field><hidden/></default-field></field>
-                                            <field name="merchantId"><default-field><hidden/></default-field></field>
-                                            <field name="message"><default-field><hidden default-value="帮我分析匹配结果"/></default-field></field>
-                                            <field name="quickAction3">
-                                                <default-field title="">
-                                                    <submit text="匹配分析" btn-type="success"/>
-                                                </default-field>
-                                            </field>
-                                        </form-single>
-                                    </row-col>
-                                </container-row>
-                            </container>
-                        </widgets>
-                    </section>
-
-                    <!-- 无会话时的提示 -->
-                    <section name="NoSessionHint">
-                        <condition><expression>!sessionId</expression></condition>
-                        <widgets>
-                            <container>
-                                <label text="提示" type="h5"/>
-                                <label text="请先点击左侧的「开始AI对话」按钮创建会话，然后就可以使用快速操作了。"/>
-                            </container>
-                        </widgets>
-                    </section>
-
-                    <!-- 推荐内容 -->
-                    <section name="RecommendationsSection">
-                        <condition><expression>smartRecs.recommendations</expression></condition>
-                        <widgets>
-                            <label text="为您推荐" type="h5"/>
-                            <section-iterate name="RecommendationsList" list="smartRecs.recommendations" entry="rec">
-                                <widgets>
-                                    <container style="recommendation-item">
-                                        <label text="${rec.title}" style="font-weight: bold;"/>
-                                        <label text="${rec.description}"/>
-                                        <label text="匹配度: ${(rec.score * 100).intValue()}%" style="color: green;"/>
-                                    </container>
-                                </widgets>
-                            </section-iterate>
-                        </widgets>
-                    </section>
+                <container style="feature-item">
+                    <div style="feature-icon">📊</div>
+                    <label text="数据分析" type="h5"/>
+                    <label text="市场趋势分析，助您做出明智决策"/>
                 </container>
-            </row-col>
-        </container-row>
+                <container style="feature-item">
+                    <div style="feature-icon">💬</div>
+                    <label text="实时沟通" type="h5"/>
+                    <label text="24/7在线AI助手，随时为您服务"/>
+                </container>
+                <container style="feature-item">
+                    <div style="feature-icon">🚀</div>
+                    <label text="高效便捷" type="h5"/>
+                    <label text="一键式操作，快速完成业务流程"/>
+                </container>
+            </container>
+
+            <!-- 智能推荐 -->
+            <container style="status-card">
+                <label text="💡 智能推荐" type="h3"/>
+                <section name="RecommendationsSection">
+                    <condition><expression>smartRecs.recommendations</expression></condition>
+                    <widgets>
+                        <section-iterate name="RecommendationsList" list="smartRecs.recommendations" entry="rec">
+                            <widgets>
+                                <container style="recommendation-card">
+                                    <container-row>
+                                        <row-col lg="9">
+                                            <label text="${rec.title}" type="h5" style="margin-bottom: 5px;"/>
+                                            <label text="${rec.description}"/>
+                                        </row-col>
+                                        <row-col lg="3" style="text-align: right;">
+                                            <span class="score-badge">${(rec.score * 100).intValue()}%</span>
+                                        </row-col>
+                                    </container-row>
+                                </container>
+                            </widgets>
+                        </section-iterate>
+                    </widgets>
+                </section>
+            </container>
+
+            <!-- 配置帮助 -->
+            <div id="config-help" class="config-help">
+                <label text="⚠️ LiveChat未正确加载" type="h4"/>
+                <label text="如果您没有看到右下角的聊天图标，请按照以下步骤配置："/>
+                <label text="1. 运行配置脚本: ./runtime/component/moqui-mcp/configure_livechat.sh"/>
+                <label text="2. 在Rocket.Chat管理后台启用Omnichannel功能"/>
+                <label text="3. 配置LiveChat设置"/>
+                <label text="4. 刷新此页面"/>
+            </div>
+        </container>
     </widgets>
 </screen>
