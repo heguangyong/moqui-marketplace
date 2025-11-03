@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <service verb="find" noun="MatchesForListing" authenticate="false">
+        <description>使用智能匹配引擎为指定供需信息查找候选匹配</description>
+        <in-parameters>
+            <parameter name="listingId" required="true"/>
+            <parameter name="maxResults" type="Integer" default="10"/>
+            <parameter name="minScore" type="BigDecimal" default="0.6"/>
+            <parameter name="autoNotify" type="Boolean" default="false"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="matches" type="List"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                import org.moqui.marketplace.matching.SmartMatchingEngine
+                import java.math.BigDecimal
+
+                BigDecimal threshold = (minScore instanceof BigDecimal) ? (BigDecimal) minScore :
+                        new BigDecimal(minScore ?: "0.6")
+                Integer limit = (maxResults ?: 10) as Integer
+
+                def engine = new SmartMatchingEngine(ec)
+                List<Map<String, Object>> rawResults = engine.findMatchesForListing(listingId, limit, threshold)
+
+                matches = rawResults.collect { Map<String, Object> match ->
+                    def candidate = match.remove("candidateListing")
+                    Map<String, Object> candidateInfo = [:]
+                    if (candidate) {
+                        candidateInfo = [
+                            listingId   : candidate.get("listingId"),
+                            listingType : candidate.get("listingType"),
+                            publisherId : candidate.get("publisherId"),
+                            title       : candidate.get("title"),
+                            category    : candidate.get("category"),
+                            subCategory : candidate.get("subCategory"),
+                            priceMin    : candidate.get("priceMin"),
+                            priceMax    : candidate.get("priceMax"),
+                            locationDesc: candidate.get("locationDesc"),
+                            status      : candidate.get("status"),
+                            createdDate : candidate.get("createdDate")
+                        ]
+                    }
+                    match + [candidate: candidateInfo]
+                }
+
+                if (autoNotify && matches) {
+                    matches.each { Map<String, Object> match ->
+                        def candidate = match.candidate ?: [:]
+                        def recipientPartyId = candidate.publisherId
+                        def matchIdValue = match.matchId
+                        if (recipientPartyId && matchIdValue) {
+                            try {
+                                ec.service.sync().name("marketplace.NotificationServices.send#MatchNotificationViaChannel")
+                                        .parameters([
+                                                recipientPartyId: recipientPartyId,
+                                                matchId         : matchIdValue,
+                                                notificationType: "NEW_MATCH",
+                                                channel         : "ROCKETCHAT",
+                                                messageTemplate : null
+                                        ]).call()
+                            } catch (Exception e) {
+                                ec.logger.warn("Failed to auto notify for listing ${listingId}: ${e.message}", e)
+                            }
+                        }
+                    }
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="calculate" noun="MatchScoreDetailed" authenticate="false">
+        <description>计算两个供需信息之间的详细匹配评分</description>
+        <in-parameters>
+            <parameter name="supplyListingId" required="true"/>
+            <parameter name="demandListingId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="matchScore" type="BigDecimal"/>
+            <parameter name="tagSimilarity" type="BigDecimal"/>
+            <parameter name="geoProximity" type="BigDecimal"/>
+            <parameter name="priceMatch" type="BigDecimal"/>
+            <parameter name="freshnessScore" type="BigDecimal"/>
+            <parameter name="preferenceScore" type="BigDecimal"/>
+            <parameter name="matchReason" type="String"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                import org.moqui.marketplace.matching.SmartMatchingEngine
+                import java.math.RoundingMode
+
+                def entity = ec.entity
+                def supply = entity.find("marketplace.listing.Listing").condition("listingId", supplyListingId).one()
+                def demand = entity.find("marketplace.listing.Listing").condition("listingId", demandListingId).one()
+
+                if (!supply || !demand) {
+                    ec.message.addError("供需信息不存在，无法计算匹配分数")
+                    return
+                }
+
+                def engine = new SmartMatchingEngine(ec)
+                Map<String, Object> scoreMap = engine.calculateMatchScore(supply, demand)
+
+                matchScore = scoreMap.matchScore
+                tagSimilarity = scoreMap.tagSimilarity
+                geoProximity = scoreMap.geoProximity
+                priceMatch = scoreMap.priceMatch
+                freshnessScore = scoreMap.freshnessScore
+                preferenceScore = scoreMap.preferenceScore
+
+                BigDecimal percent = (matchScore ?: BigDecimal.ZERO).multiply(new BigDecimal("100"))
+                        .setScale(0, RoundingMode.HALF_UP)
+                matchReason = "供应【${supply.title ?: supplyListingId}】与需求【${demand.title ?: demandListingId}】的匹配度约为${percent}%"
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="generate" noun="AIMatchReason" authenticate="false">
+        <description>根据匹配分数和基础信息生成匹配推荐理由（占位实现）</description>
+        <in-parameters>
+            <parameter name="matchId" required="true"/>
+            <parameter name="supplyListingId" required="true"/>
+            <parameter name="demandListingId" required="true"/>
+            <parameter name="matchScore" type="BigDecimal" required="true"/>
+            <parameter name="useAI" type="Boolean" default="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="matchReason" type="String"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                import java.math.RoundingMode
+
+                def entity = ec.entity
+                def supply = entity.find("marketplace.listing.Listing").condition("listingId", supplyListingId).one()
+                def demand = entity.find("marketplace.listing.Listing").condition("listingId", demandListingId).one()
+
+                BigDecimal score = matchScore ?: BigDecimal.ZERO
+                BigDecimal percent = score.multiply(new BigDecimal("100")).setScale(0, RoundingMode.HALF_UP)
+
+                String supplyName = supply?.title ?: supplyListingId
+                String demandName = demand?.title ?: demandListingId
+                String baseReason = "匹配度${percent}%：${supplyName} 满足 ${demandName} 的品类与价格需求，适合立即联系。"
+
+                matchReason = baseReason
+
+                def matchValue = entity.find("marketplace.match.Match")
+                        .condition("matchId", matchId)
+                        .forUpdate(true)
+                        .one()
+                if (matchValue) {
+                    matchValue.set("matchReason", matchReason)
+                    matchValue.store()
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="confirm" noun="MatchAndNotify" authenticate="false">
+        <description>确认撮合结果并返回双方联系方式</description>
+        <in-parameters>
+            <parameter name="matchId" required="true"/>
+            <parameter name="confirmingPartyId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="contactInfo" type="Map"/>
+            <parameter name="notified" type="Boolean"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                Map<String, Object> contactInfoMap = [:]
+                Boolean notifiedFlag = false
+
+                def matchValue = ec.entity.find("marketplace.match.Match")
+                        .condition("matchId", matchId)
+                        .forUpdate(true)
+                        .one()
+
+                if (!matchValue) {
+                    ec.message.addError("匹配记录不存在，无法确认")
+                    return
+                }
+
+                def supply = ec.entity.find("marketplace.listing.Listing")
+                        .condition("listingId", matchValue.get("supplyListingId"))
+                        .one()
+                def demand = ec.entity.find("marketplace.listing.Listing")
+                        .condition("listingId", matchValue.get("demandListingId"))
+                        .one()
+
+                matchValue.set("status", "CONTACTED")
+                matchValue.set("contactedDate", ec.user.nowTimestamp)
+                matchValue.store()
+
+                contactInfoMap = [
+                    supplyListingId : matchValue.get("supplyListingId"),
+                    demandListingId : matchValue.get("demandListingId"),
+                    supplyPublisherId: supply?.get("publisherId"),
+                    demandPublisherId: demand?.get("publisherId")
+                ]
+
+                try {
+                    def notifyResult = ec.service.sync().name("marketplace.NotificationServices.send#MatchNotificationViaChannel")
+                            .parameters([
+                                    recipientPartyId: matchValue.get("demandListingId") ? demand?.get("publisherId") : null,
+                                    matchId         : matchId,
+                                    notificationType: "CONTACT_REQUEST",
+                                    channel         : "ROCKETCHAT",
+                                    messageTemplate : null
+                            ]).call()
+                    notifiedFlag = notifyResult?.sent ?: false
+                } catch (Exception e) {
+                    ec.logger.warn("Failed to notify match ${matchId}: ${e.message}", e)
+                }
+
+                contactInfo = contactInfoMap
+                notified = notifiedFlag
+            ]]></script>
+        </actions>
+    </service>
+
+</services>

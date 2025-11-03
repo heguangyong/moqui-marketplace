@@ -8,6 +8,7 @@
         <description>获取商家统计数据</description>
         <in-parameters>
             <parameter name="merchantId"/>
+            <parameter name="listingId"/>
         </in-parameters>
         <out-parameters>
             <parameter name="totalSupplyListings" type="Long"/>
@@ -92,170 +93,58 @@
             <set field="matchResults" from="[]"/>
 
             <script><![CDATA[
+                import org.moqui.marketplace.matching.SmartMatchingEngine
+                import java.math.BigDecimal
+
+                Integer maxResultCount = (maxResults ?: 50) as Integer
+                BigDecimal scoreThreshold = (minScore instanceof BigDecimal) ? (BigDecimal) minScore :
+                        new BigDecimal(minScore ?: "0.6")
+
+                def engine = new SmartMatchingEngine(ec)
+
                 try {
-                    // 获取当前时间
-                    def now = ec.user.nowTimestamp
-
-                    // 获取所有活跃的供应信息 - 使用disableAuthz
-                    def supplyListings = ec.entity.find("marketplace.SupplyListing")
-                        .condition("status", "ACTIVE")
-                        .disableAuthz()
-                        .list()
-
-                    // 获取所有活跃的需求信息 - 使用disableAuthz
-                    def demandListings = ec.entity.find("marketplace.DemandListing")
-                        .condition("status", "ACTIVE")
-                        .disableAuthz()
-                        .list()
-
-                    def matches = []
-                    def matchId = 1
-
-                    // 智能匹配算法
-                    for (supply in supplyListings) {
-                        for (demand in demandListings) {
-                            def score = calculateMatchScore(supply, demand)
-
-                            if (score >= minScore) {
-                                // 检查是否已经存在匹配记录 - 使用disableAuthz
-                                def existingMatch = ec.entity.find("marketplace.match.Match")
-                                    .condition("supplyListingId", supply.supplyListingId)
-                                    .condition("demandListingId", demand.demandListingId)
-                                    .disableAuthz()
-                                    .one()
-
-                                if (!existingMatch) {
-                                    // 创建新的匹配记录 - 使用disableAuthz
-                                    def newMatchId = "MATCH_${matchId++}_${System.currentTimeMillis()}"
-
-                                    ec.entity.makeValue("marketplace.match.Match")
-                                        .setFields([
-                                            matchId: newMatchId,
-                                            supplyListingId: supply.supplyListingId,
-                                            demandListingId: demand.demandListingId,
-                                            matchScore: score,
-                                            status: "SUGGESTED",
-                                            suggestedDate: now,
-                                            createdDate: now
-                                        ], true, null, false)
-                                        .setSequencedIdPrimary()
-                                        .createOrUpdate()
-
-                                    matches.add([
-                                        matchResultId: newMatchId,
-                                        supplyListingId: supply.supplyListingId,
-                                        demandListingId: demand.demandListingId,
-                                        matchScore: score,
-                                        status: "SUGGESTED",
-                                        matchDate: now
-                                    ])
-
-                                    if (matches.size() >= maxResults) break
-                                }
-                            }
+                    if (listingId) {
+                        def targetListing = ec.entity.find("marketplace.listing.Listing")
+                            .condition("listingId", listingId)
+                            .disableAuthz()
+                            .one()
+                        if (!targetListing) {
+                            success = false
+                            error = "指定的供需信息不存在"
+                        } else {
+                            matchResults = engine.findMatchesForListing(listingId, maxResultCount, scoreThreshold)
                         }
-                        if (matches.size() >= maxResults) break
-                    }
-
-                    // 如果没有找到新匹配，返回现有的匹配记录 - 使用disableAuthz
-                    if (matches.isEmpty()) {
+                    } else {
                         def existingMatches = ec.entity.find("marketplace.match.Match")
                             .orderBy("-suggestedDate")
-                            .limit(maxResults)
+                            .limit(maxResultCount)
                             .disableAuthz()
                             .list()
 
-                        matches = existingMatches.collect { match ->
-                            [
-                                matchResultId: match.matchId,
-                                supplyListingId: match.supplyListingId,
-                                demandListingId: match.demandListingId,
-                                matchScore: match.matchScore ?: 0.8,
-                                status: match.status ?: "SUGGESTED",
-                                matchDate: match.suggestedDate ?: now
-                            ]
+                        if (existingMatches) {
+                            matchResults = existingMatches.collect { match ->
+                                [
+                                    matchResultId   : match.matchId,
+                                    supplyListingId : match.supplyListingId,
+                                    demandListingId : match.demandListingId,
+                                    matchScore      : match.matchScore ?: 0.8,
+                                    status          : match.status ?: "SUGGESTED",
+                                    matchDate       : match.suggestedDate ?: match.createdDate
+                                ]
+                            }
+                        } else {
+                            matchResults = []
                         }
                     }
-
-                    // 如果还是没有数据，生成一些模拟匹配结果
-                    if (matches.isEmpty()) {
-                        for (int i = 1; i <= 5; i++) {
-                            matches.add([
-                                matchResultId: "DEMO_MATCH_${i}",
-                                supplyListingId: "SUPPLY_${i}",
-                                demandListingId: "DEMAND_${i}",
-                                matchScore: 0.7 + (i * 0.05),
-                                status: ["SUGGESTED", "CONTACTED", "NEGOTIATING", "COMPLETED", "CANCELLED"][i-1],
-                                matchDate: now
-                            ])
-                        }
-                    }
-
-                    matchResults = matches
-                    totalMatches = matches.size()
-
                 } catch (Exception e) {
                     ec.logger.error("智能匹配过程中发生错误: ${e.message}", e)
                     success = false
                     error = "匹配过程发生错误: ${e.message}"
-                    totalMatches = 0
                     matchResults = []
                 }
 
-                // 智能匹配算分算法
-                def calculateMatchScore(supply, demand) {
-                    def score = 0.0
-
-                    // 商品名称匹配 (40%)
-                    if (supply.productName && demand.productName) {
-                        def supplyName = supply.productName.toLowerCase()
-                        def demandName = demand.productName.toLowerCase()
-                        if (supplyName.contains(demandName) || demandName.contains(supplyName)) {
-                            score += 0.4
-                        } else if (supplyName.split(" ").any { word -> demandName.contains(word) }) {
-                            score += 0.2
-                        }
-                    }
-
-                    // 类别匹配 (30%)
-                    if (supply.category && demand.category) {
-                        if (supply.category.toLowerCase() == demand.category.toLowerCase()) {
-                            score += 0.3
-                        } else if (supply.category.toLowerCase().contains(demand.category.toLowerCase()) ||
-                                 demand.category.toLowerCase().contains(supply.category.toLowerCase())) {
-                            score += 0.15
-                        }
-                    }
-
-                    // 价格匹配 (20%)
-                    if (supply.price && demand.budgetMax) {
-                        def priceRatio = supply.price / demand.budgetMax
-                        if (priceRatio <= 1.0) {
-                            score += 0.2 * (1.0 - Math.abs(priceRatio - 0.8))
-                        }
-                    }
-
-                    // 数量匹配 (10%)
-                    if (supply.quantity && demand.quantityNeeded) {
-                        try {
-                            def supplyQty = Double.parseDouble(supply.quantity.toString().replaceAll("[^\\d.]", ""))
-                            def demandQty = Double.parseDouble(demand.quantityNeeded.toString().replaceAll("[^\\d.]", ""))
-                            if (supplyQty >= demandQty) {
-                                score += 0.1
-                            } else {
-                                score += 0.05 * (supplyQty / demandQty)
-                            }
-                        } catch (Exception e) {
-                            // 数量解析失败，给予默认分数
-                            score += 0.05
-                        }
-                    }
-
-                    // 随机因子增加一些变化 (最多 ±0.1)
-                    score += (Math.random() - 0.5) * 0.2
-
-                    return Math.max(0.0, Math.min(1.0, score))
-                }
+                totalMatches = matchResults.size()
+                context.matches = matchResults
             ]]></script>
         </actions>
     </service>
@@ -413,6 +302,74 @@
                     success = false
                     message = "初始化演示数据失败: ${e.message}"
                 }
+            ]]></script>
+        </actions>
+    </service>
+
+    <!-- ==================== 智能匹配统计服务 ==================== -->
+
+    <service verb="get" noun="MatchingStats" authenticate="false" allow-remote="true">
+        <description>获取匹配统计信息</description>
+        <in-parameters>
+            <parameter name="merchantId"/>
+            <parameter name="listingId"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="totalMatches" type="Long"/>
+            <parameter name="averageScore" type="BigDecimal"/>
+            <parameter name="recentMatches" type="List"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                import java.math.BigDecimal
+                import java.math.RoundingMode
+
+                def matchFind = ec.entity.find("marketplace.match.Match")
+
+                def cf = ec.entity.conditionFactory
+
+                if (listingId) {
+                    matchFind.condition(ec.entity.conditionFactory.makeCondition([
+                            cf.makeCondition("supplyListingId", listingId),
+                            cf.makeCondition("demandListingId", listingId)
+                    ], org.moqui.entity.EntityCondition.JoinOperator.OR))
+                }
+
+                if (merchantId) {
+                    def listings = ec.entity.find("marketplace.listing.Listing")
+                            .condition("publisherId", merchantId)
+                            .disableAuthz()
+                            .list()
+                    Set<String> listingIds = listings.collect { it.get("listingId") } as Set<String>
+                    if (listingIds) {
+                        matchFind.condition(ec.entity.conditionFactory.makeCondition([
+                                cf.makeCondition("supplyListingId", org.moqui.entity.EntityCondition.IN, listingIds),
+                                cf.makeCondition("demandListingId", org.moqui.entity.EntityCondition.IN, listingIds)
+                        ], org.moqui.entity.EntityCondition.JoinOperator.OR))
+                    }
+                }
+
+                def matchList = matchFind.disableAuthz().orderBy("-suggestedDate").list()
+                totalMatches = matchList?.size() ?: 0
+
+                if (totalMatches) {
+                    BigDecimal total = matchList.collect { it.get("matchScore") ?: BigDecimal.ZERO }
+                            .inject(BigDecimal.ZERO) { BigDecimal acc, BigDecimal val -> acc.add(val) }
+                    averageScore = total.divide(new BigDecimal(totalMatches), 4, RoundingMode.HALF_UP)
+                } else {
+                    averageScore = BigDecimal.ZERO
+                }
+
+                recentMatches = matchList ? matchList.take(10).collect {
+                    [
+                            matchId         : it.get("matchId"),
+                            supplyListingId : it.get("supplyListingId"),
+                            demandListingId : it.get("demandListingId"),
+                            matchScore      : it.get("matchScore"),
+                            status          : it.get("status"),
+                            suggestedDate   : it.get("suggestedDate")
+                    ]
+                } : []
             ]]></script>
         </actions>
     </service>

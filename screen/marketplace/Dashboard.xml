@@ -7,392 +7,535 @@
     <parameter name="merchantId"/>
 
     <actions>
-        <!-- 获取当前商家信息 -->
+        <!-- 获取当前商家信息（默认展示全部） -->
         <if condition="!merchantId">
-            <set field="merchantId" from="ec.user.userAccount?.partyId ?: 'DEMO_MERCHANT'"/>
+            <set field="merchantId" value="__ALL__"/>
         </if>
 
-        <!-- 获取商家统计信息 - 使用脚本避免权限问题 -->
         <script><![CDATA[
-            // 直接设置统计数据，避免实体权限检查
-            stats = [:]
+            import org.moqui.entity.EntityCondition
+            import java.sql.Timestamp
+            import java.time.LocalDate
+            import java.time.ZoneId
+            import java.math.BigDecimal
+            import java.math.RoundingMode
 
-            // 尝试查询实际数据，如果失败则使用默认数据
-            try {
-                def supplyCount = ec.entity.find("marketplace.listing.Listing")
-                    .condition("publisherId", merchantId)
-                    .condition("listingType", "SUPPLY")
-                    .disableAuthz()
-                    .count()
-                stats.totalSupplyListings = supplyCount
+            def isAllMerchant = !merchantId || "__ALL__".equalsIgnoreCase(merchantId) || "ALL".equalsIgnoreCase(merchantId)
+            displayMerchantName = isAllMerchant ? '全部商户' : merchantId
+            filterMerchant = isAllMerchant ? '' : merchantId
 
-                def activeSupplyCount = ec.entity.find("marketplace.listing.Listing")
-                    .condition("publisherId", merchantId)
-                    .condition("listingType", "SUPPLY")
-                    .condition("status", "ACTIVE")
-                    .disableAuthz()
-                    .count()
-                stats.activeSupplyListings = activeSupplyCount
-
-                def demandCount = ec.entity.find("marketplace.listing.Listing")
-                    .condition("publisherId", merchantId)
-                    .condition("listingType", "DEMAND")
-                    .disableAuthz()
-                    .count()
-                stats.totalDemandListings = demandCount
-
-                def activeDemandCount = ec.entity.find("marketplace.listing.Listing")
-                    .condition("publisherId", merchantId)
-                    .condition("listingType", "DEMAND")
-                    .condition("status", "ACTIVE")
-                    .disableAuthz()
-                    .count()
-                stats.activeDemandListings = activeDemandCount
-            } catch (Exception e) {
-                // 如果查询失败，使用默认数据
-                ec.logger.warn("无法查询统计数据，使用默认值: ${e.message}")
-                stats.totalSupplyListings = 0L
-                stats.activeSupplyListings = 0L
-                stats.totalDemandListings = 0L
-                stats.activeDemandListings = 0L
-            }
-
-            // 设置默认统计数据
-            stats.totalMatches = 15L
-            stats.pendingMatches = 3L
-            stats.completedTransactions = 12L
-            stats.totalRevenue = 45680.50
-            stats.averageRating = 4.3
-            stats.totalReviews = 28L
-        ]]></script>
-
-        <!-- 获取最近的供应、需求和匹配信息 - 使用脚本避免权限问题 -->
-        <script><![CDATA[
-            // 初始化空列表
+            stats = [
+                totalSupplyListings : 0L,
+                activeSupplyListings: 0L,
+                totalDemandListings : 0L,
+                activeDemandListings: 0L,
+                totalMatches        : 0L,
+                completedTransactions: 0L
+            ]
+            matchingStats = [:]
+            telegramStats = [
+                totalSessions : 0L,
+                activeSessions: 0L,
+                todaySessions : 0L
+            ]
             recentSupplies = []
             recentDemands = []
-            recentMatches = []
+            recentMatchesDisplay = []
+            telegramSessionsDisplay = []
+            recentTelegramMessagesDisplay = []
+            botUsername = System.getProperty("mcp.telegram.bot.username") ?: System.getProperty("telegram.bot.username") ?: "@待配置"
+
+            def partyNameCache = [:]
+            Closure<String> getPartyName = { String partyId ->
+                if (!partyId) return ""
+                if (partyNameCache.containsKey(partyId)) return partyNameCache[partyId]
+                def detailFind = ec.entity.find("mantle.party.PartyDetail")
+                detailFind.condition("partyId", partyId)
+                detailFind.disableAuthz()
+                def detail = detailFind.one()
+                String name = detail?.fullName ?: detail?.organizationName ?: detail?.groupName ?: partyId
+                partyNameCache[partyId] = name
+                return name
+            }
+
+            Closure<Long> countListings = { String listingType, String status ->
+                def find = ec.entity.find("marketplace.listing.Listing")
+                    .condition("listingType", listingType)
+                if (!isAllMerchant) find.condition("publisherId", merchantId)
+                if (status) find.condition("status", status)
+                find.disableAuthz()
+                return (find.count() ?: 0L)
+            }
 
             try {
-                // 尝试查询最近的供应信息
-                recentSupplies = ec.entity.find("marketplace.SupplyListing")
-                    .condition("publisherId", merchantId)
+                stats.totalSupplyListings = countListings("SUPPLY", null)
+                stats.activeSupplyListings = countListings("SUPPLY", "ACTIVE")
+                stats.totalDemandListings = countListings("DEMAND", null)
+                stats.activeDemandListings = countListings("DEMAND", "ACTIVE")
+            } catch (Exception e) {
+                ec.logger.warn("统计供应/需求数量失败: ${e.message}")
+            }
+
+            try {
+                def matchCountFind = ec.entity.find("marketplace.match.Match")
+                if (!isAllMerchant) {
+                    matchCountFind.condition("status", EntityCondition.ComparisonOperator.NOT_EQUAL, "REJECTED")
+                }
+                matchCountFind.disableAuthz()
+                stats.totalMatches = matchCountFind.count() ?: 0L
+            } catch (Exception e) {
+                ec.logger.warn("统计匹配数量失败: ${e.message}")
+            }
+
+            try {
+                Map matchStatsResp = ec.service.sync().name("marketplace.MarketplaceServices.get#MatchingStats")
+                    .parameters(isAllMerchant ? [:] : [merchantId: merchantId])
+                    .call()
+                if (matchStatsResp) {
+                    matchingStats = matchStatsResp
+                    if (matchingStats.averageScore != null && !(matchingStats.averageScore instanceof BigDecimal)) {
+                        matchingStats.averageScore = new BigDecimal(matchingStats.averageScore.toString())
+                    }
+                }
+            } catch (Exception e) {
+                ec.logger.warn("获取匹配统计失败: ${e.message}")
+            }
+
+            // 最近供应/需求
+            try {
+                def supplyFind = ec.entity.find("marketplace.SupplyListing")
                     .orderBy("-createdDate")
                     .limit(5)
-                    .disableAuthz()
-                    .list()
+                if (!isAllMerchant) supplyFind.condition("publisherId", merchantId)
+                supplyFind.disableAuthz()
+                recentSupplies = supplyFind.list()
             } catch (Exception e) {
                 ec.logger.warn("无法查询供应信息: ${e.message}")
-                recentSupplies = []
             }
 
             try {
-                // 尝试查询最近的需求信息
-                recentDemands = ec.entity.find("marketplace.DemandListing")
-                    .condition("publisherId", merchantId)
+                def demandFind = ec.entity.find("marketplace.DemandListing")
                     .orderBy("-createdDate")
                     .limit(5)
-                    .disableAuthz()
-                    .list()
+                if (!isAllMerchant) demandFind.condition("publisherId", merchantId)
+                demandFind.disableAuthz()
+                recentDemands = demandFind.list()
             } catch (Exception e) {
                 ec.logger.warn("无法查询需求信息: ${e.message}")
-                recentDemands = []
+            }
+
+            // 列表缓存
+            def listingCache = [:]
+            Closure<Map> getListingInfo = { String listingId ->
+                if (!listingId) return [title: "", publisherId: null]
+                if (listingCache.containsKey(listingId)) return listingCache[listingId]
+                def find = ec.entity.find("marketplace.listing.Listing")
+                    .condition("listingId", listingId)
+                find.disableAuthz()
+                def listing = find.one()
+                def info = [
+                    title      : listing?.title ?: listingId,
+                    publisherId: listing?.publisherId,
+                    status     : listing?.status
+                ]
+                listingCache[listingId] = info
+                return info
+            }
+
+            // 商家拥有的listing
+            Set<String> merchantListingIds = new LinkedHashSet<>()
+            if (!isAllMerchant) {
+                def merchantListingFind = ec.entity.find("marketplace.listing.Listing")
+                    .condition("publisherId", merchantId)
+                merchantListingFind.disableAuthz()
+                for (listing in merchantListingFind.list()) {
+                    merchantListingIds.add(listing.listingId)
+                }
             }
 
             try {
-                // 尝试查询最近的匹配结果 - 通过供应信息关联到商家
-                def supplierMatches = ec.entity.find("marketplace.match.Match")
+                def matchFind = ec.entity.find("marketplace.match.Match")
                     .orderBy("-suggestedDate")
-                    .limit(5)
-                    .disableAuthz()
-                    .list()
+                    .limit(20)
+                matchFind.disableAuthz()
+                def matchList = matchFind.list()
+                for (matchValue in matchList) {
+                    if (!matchValue) continue
+                    boolean belongsToMerchant = isAllMerchant ||
+                        merchantListingIds.contains(matchValue.supplyListingId) ||
+                        merchantListingIds.contains(matchValue.demandListingId)
+                    if (!belongsToMerchant) continue
 
-                // 模拟一些匹配结果
-                recentMatches = []
-                for (int i = 0; i < 3; i++) {
-                    recentMatches.add([
-                        matchId: "MATCH_${i+1}",
-                        supplyListingId: "SUPPLY_${i+1}",
-                        demandListingId: "DEMAND_${i+1}",
-                        matchScore: 0.85 + (i * 0.05),
-                        status: ["SUGGESTED", "CONTACTED", "COMPLETED"][i],
-                        matchDate: new Date()
+                    BigDecimal matchScore = matchValue.matchScore ?: BigDecimal.ZERO
+                    BigDecimal percent = matchScore.multiply(new BigDecimal("100")).setScale(1, RoundingMode.HALF_UP)
+                    Map supplyInfo = getListingInfo(matchValue.supplyListingId)
+                    Map demandInfo = getListingInfo(matchValue.demandListingId)
+
+                    recentMatchesDisplay.add([
+                            matchId           : matchValue.matchId,
+                            matchScorePercent : percent,
+                            status            : matchValue.status ?: "SUGGESTED",
+                            suggestedDate     : matchValue.suggestedDate ?: matchValue.createdDate,
+                            supplyTitle       : supplyInfo.title,
+                            demandTitle       : demandInfo.title,
+                            supplyListingId   : matchValue.supplyListingId,
+                            demandListingId   : matchValue.demandListingId
+                    ])
+                }
+                recentMatchesDisplay = recentMatchesDisplay.sort { it.suggestedDate ? -it.suggestedDate.time : 0 }.take(5)
+            } catch (Exception e) {
+                ec.logger.warn("无法查询匹配结果: ${e.message}")
+            }
+
+            // Telegram 会话统计
+            try {
+                EntityCondition telegramCondition = ec.entity.conditionFactory.makeCondition("sessionId", EntityCondition.ComparisonOperator.LIKE, "telegram%")
+                def totalSessionsFind = ec.entity.find("mcp.dialog.McpDialogSession")
+                    .condition(telegramCondition)
+                    .condition("sessionType", "MARKETPLACE")
+                if (!isAllMerchant) totalSessionsFind.condition("merchantId", merchantId)
+                totalSessionsFind.disableAuthz()
+                telegramStats.totalSessions = totalSessionsFind.count() ?: 0L
+
+                def activeSessionsFind = ec.entity.find("mcp.dialog.McpDialogSession")
+                    .condition(telegramCondition)
+                    .condition("sessionType", "MARKETPLACE")
+                    .condition("status", "ACTIVE")
+                if (!isAllMerchant) activeSessionsFind.condition("merchantId", merchantId)
+                activeSessionsFind.disableAuthz()
+                telegramStats.activeSessions = activeSessionsFind.count() ?: 0L
+
+                Timestamp startOfDay = Timestamp.valueOf(LocalDate.now(ZoneId.systemDefault()).atStartOfDay())
+                def todaySessionsFind = ec.entity.find("mcp.dialog.McpDialogSession")
+                    .condition(telegramCondition)
+                    .condition("sessionType", "MARKETPLACE")
+                    .condition("createdDate", EntityCondition.ComparisonOperator.GREATER_THAN_EQUAL_TO, startOfDay)
+                if (!isAllMerchant) todaySessionsFind.condition("merchantId", merchantId)
+                todaySessionsFind.disableAuthz()
+                telegramStats.todaySessions = todaySessionsFind.count() ?: 0L
+
+                def sessionListFind = ec.entity.find("mcp.dialog.McpDialogSession")
+                    .condition(telegramCondition)
+                    .condition("sessionType", "MARKETPLACE")
+                    .orderBy("-lastModifiedDate")
+                    .limit(5)
+                if (!isAllMerchant) sessionListFind.condition("merchantId", merchantId)
+                sessionListFind.disableAuthz()
+                def sessionList = sessionListFind.list()
+
+                def sessionById = [:]
+                sessionList.each { sess ->
+                    sessionById[sess.sessionId] = sess
+                }
+
+                // 最近的Telegram消息
+                def messageFind = ec.entity.find("mcp.dialog.McpDialogMessage")
+                    .condition("sessionId", EntityCondition.ComparisonOperator.LIKE, "telegram%")
+                    .orderBy("-processedDate")
+                    .limit(8)
+                if (!isAllMerchant) messageFind.condition("merchantId", merchantId)
+                messageFind.disableAuthz()
+                def messageList = messageFind.list()
+
+                Closure<String> truncate = { String text, int length ->
+                    if (!text) return ""
+                    String cleaned = text.replaceAll("\\s+", " ").trim()
+                    return cleaned.length() > length ? cleaned.substring(0, length) + "…" : cleaned
+                }
+
+                for (sess in sessionList) {
+                    def lastMessage = messageList.find { it.sessionId == sess.sessionId }
+                    telegramSessionsDisplay.add([
+                        sessionId     : sess.sessionId,
+                        merchantName  : getPartyName(sess.merchantId),
+                        customerName  : getPartyName(sess.customerId),
+                        status        : sess.status ?: "ACTIVE",
+                        currentPhase  : sess.currentPhase ?: "待分配",
+                        updatedDate   : sess.lastModifiedDate ?: sess.createdDate,
+                        lastMessage   : lastMessage ? truncate(lastMessage.content ?: lastMessage.message, 80) : '—',
+                        lastIntent    : lastMessage?.intent ?: '—'
+                    ])
+                }
+
+                for (msg in messageList) {
+                    recentTelegramMessagesDisplay.add([
+                        sessionId   : msg.sessionId,
+                        merchantName: getPartyName(msg.merchantId),
+                        content     : (truncate(msg.content ?: msg.message, 100) ?: '—'),
+                        aiResponse  : (truncate(msg.aiResponse, 100) ?: '—'),
+                        intent      : msg.intent,
+                        processedDate: msg.processedDate
                     ])
                 }
             } catch (Exception e) {
-                ec.logger.warn("无法查询匹配结果: ${e.message}")
-                recentMatches = []
+                ec.logger.warn("Telegram 会话数据加载失败: ${e.message}")
             }
         ]]></script>
     </actions>
-
     <widgets>
-        <!-- Rocket.Chat LiveChat集成 -->
-        <render-mode>
-            <text type="html"><![CDATA[
-                <script type="text/javascript">
-                  (function(w, d, s, u) {
-                    w.RocketChat = function(c) { w.RocketChat._.push(c) };
-                    w.RocketChat._ = [];
-                    w.RocketChat.url = u;
-                    var h = d.getElementsByTagName(s)[0],
-                        j = d.createElement(s);
-                    j.async = true;
-                    j.src = u + "/livechat/rocketchat-livechat.min.js?_=1";
-                    h.parentNode.insertBefore(j, h);
-                  })(window, document, "script", "http://localhost:4000");
+        <!-- 页面头部 - 使用Quasar 2风格 -->
+        <container style="margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
+            <container style="font-size: 2rem; font-weight: bold; color: #1976d2; margin-bottom: 8px;">
+                <label text="智能供需平台控制台"/>
+            </container>
+            <container style="color: #616161; margin-top: 8px; display: flex; gap: 8px;">
+                <label style="background: #1976d2; color: white; padding: 4px 8px; border-radius: 4px; display: inline-block;"
+                       text="当前视角：${displayMerchantName}"/>
+                <label style="background: #4caf50; color: white; padding: 4px 8px; border-radius: 4px; display: inline-block;"
+                       text="Telegram Bot：${botUsername}"/>
+            </container>
+        </container>
 
-                  // 自定义配置
-                  window.RocketChat(function() {
-                    try {
-                      // 设置用户信息
-                      RocketChat.livechat.setCustomField('merchantId', '${merchantId}');
-                      RocketChat.livechat.setCustomField('platform', 'marketplace');
-
-                      // 设置欢迎消息
-                      RocketChat.livechat.setGuestName('商家-${merchantId}');
-                      RocketChat.livechat.setGuestEmail('${merchantId}@marketplace.demo');
-
-                      // 监听聊天消息，集成到MCP AI引擎
-                      RocketChat.livechat.onChatMessage(function(data) {
-                        console.log('LiveChat message received:', data);
-
-                        // 调用MCP AI引擎处理消息
-                        if (data.msg && data.msg.trim()) {
-                          processWithMcpAi(data.msg, '${merchantId}');
-                        }
-                      });
-
-                      // 自定义聊天窗口样式
-                      RocketChat.livechat.setTheme({
-                        color: '#007bff',
-                        fontColor: '#ffffff',
-                        iconColor: '#ffffff'
-                      });
-
-                      console.log('Rocket.Chat LiveChat initialized successfully');
-                    } catch (e) {
-                      console.error('Error initializing Rocket.Chat LiveChat:', e);
-                    }
-                  });
-
-                  // 集成MCP AI引擎处理函数
-                  function processWithMcpAi(message, merchantId) {
-                    try {
-                      // 生成会话ID
-                      var sessionId = 'LIVECHAT_' + merchantId + '_' + Date.now();
-
-                      // 调用MCP AI服务
-                      fetch('/rest/s1/mcp/marketplace-chat', {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                          sessionId: sessionId,
-                          merchantId: merchantId,
-                          message: message
-                        })
-                      })
-                      .then(response => response.json())
-                      .then(data => {
-                        if (data.aiResponse) {
-                          // 发送AI响应到Rocket.Chat
-                          sendAiResponseToRocketChat(data.aiResponse);
-                        }
-                      })
-                      .catch(error => {
-                        console.error('Error calling MCP AI engine:', error);
-                      });
-                    } catch (e) {
-                      console.error('Error in processWithMcpAi:', e);
-                    }
-                  }
-
-                  // 发送AI响应到Rocket.Chat
-                  function sendAiResponseToRocketChat(aiResponse) {
-                    try {
-                      // 通过Rocket.Chat API发送消息
-                      RocketChat.livechat.sendMessage(aiResponse);
-                    } catch (e) {
-                      console.error('Error sending AI response to Rocket.Chat:', e);
-                    }
-                  }
-                </script>
-
-                <style>
-                  /* 自定义LiveChat样式 */
-                  .livechat-container {
-                    z-index: 9999 !important;
-                  }
-
-                  .livechat-widget {
-                    bottom: 20px !important;
-                    right: 20px !important;
-                  }
-
-                  .livechat-badge {
-                    background-color: #007bff !important;
-                    border-radius: 50% !important;
-                    box-shadow: 0 2px 8px rgba(0,123,255,0.3) !important;
-                  }
-
-                  .livechat-badge:hover {
-                    background-color: #0056b3 !important;
-                    transform: scale(1.1) !important;
-                    transition: all 0.3s ease !important;
-                  }
-                </style>
-            ]]></text>
-        </render-mode>
-
-        <container-row>
-            <row-col lg="12">
-                <label text="智能供需平台 - 商家控制台" type="h1"/>
-                <label text="商家ID: ${merchantId}" type="h4"/>
-                <container style="alert alert-info">
-                    <label text="💬 智能AI助手已启用！点击右下角聊天图标即可开始对话"/>
-                </container>
-            </row-col>
-        </container-row>
-
-        <!-- 统计卡片 -->
-        <container-row>
-            <row-col lg="3" md="6" sm="12">
-                <container style="card">
-                    <label text="供应总数" type="h5"/>
-                    <label text="${stats.totalSupplyListings ?: 0}" type="h2" style="text-primary"/>
-                </container>
-            </row-col>
-            <row-col lg="3" md="6" sm="12">
-                <container style="card">
-                    <label text="需求总数" type="h5"/>
-                    <label text="${stats.totalDemandListings ?: 0}" type="h2" style="text-info"/>
-                </container>
-            </row-col>
-            <row-col lg="3" md="6" sm="12">
-                <container style="card">
-                    <label text="匹配总数" type="h5"/>
-                    <label text="${stats.totalMatches ?: 0}" type="h2" style="text-success"/>
-                </container>
-            </row-col>
-            <row-col lg="3" md="6" sm="12">
-                <container style="card">
-                    <label text="活跃度评分" type="h5"/>
-                    <label text="${(stats.activityScore ?: 0.0) * 100}%" type="h2" style="text-warning"/>
-                </container>
-            </row-col>
-        </container-row>
-
-        <!-- 最近活动 -->
-        <container-row>
-            <!-- 最近供应 -->
-            <row-col lg="4" md="12">
-                <container>
-                    <label text="最近供应" type="h4"/>
-                    <container style="table table-striped">
-                        <container style="thead">
-                            <container style="tr">
-                                <container style="th"><label text="商品"/></container>
-                                <container style="th"><label text="价格"/></container>
-                                <container style="th"><label text="数量"/></container>
-                                <container style="th"><label text="状态"/></container>
-                            </container>
-                        </container>
-                        <container style="tbody">
-                            <section-iterate name="SuppliesIterate" list="recentSupplies" entry="supply">
-                                <widgets>
-                                    <container style="tr">
-                                        <container style="td"><label text="${supply.productName ?: '暂无数据'}"/></container>
-                                        <container style="td"><label text="${supply.price ?: '0.00'}"/></container>
-                                        <container style="td"><label text="${supply.quantity ?: '0'}"/></container>
-                                        <container style="td"><label text="${supply.status ?: '未知'}"/></container>
-                                    </container>
-                                </widgets>
-                            </section-iterate>
-                        </container>
-                    </container>
-                </container>
-            </row-col>
-
-            <!-- 最近需求 -->
-            <row-col lg="4" md="12">
-                <container>
-                    <label text="最近需求" type="h4"/>
-                    <container style="table table-striped">
-                        <container style="thead">
-                            <container style="tr">
-                                <container style="th"><label text="商品"/></container>
-                                <container style="th"><label text="预算"/></container>
-                                <container style="th"><label text="数量"/></container>
-                                <container style="th"><label text="状态"/></container>
-                            </container>
-                        </container>
-                        <container style="tbody">
-                            <section-iterate name="DemandsIterate" list="recentDemands" entry="demand">
-                                <widgets>
-                                    <container style="tr">
-                                        <container style="td"><label text="${demand.productName ?: '暂无数据'}"/></container>
-                                        <container style="td"><label text="${demand.budgetMax ? ec.l10n.formatCurrency(demand.budgetMax, null, 2) : '0.00'}"/></container>
-                                        <container style="td"><label text="${demand.quantityNeeded ?: '0'}"/></container>
-                                        <container style="td"><label text="${demand.status ?: '未知'}"/></container>
-                                    </container>
-                                </widgets>
-                            </section-iterate>
-                        </container>
-                    </container>
-                </container>
-            </row-col>
-
-            <!-- 最近匹配 -->
-            <row-col lg="4" md="12">
-                <container>
-                    <label text="智能匹配结果" type="h4"/>
-                    <container style="table table-striped">
-                        <container style="thead">
-                            <container style="tr">
-                                <container style="th"><label text="供应ID"/></container>
-                                <container style="th"><label text="需求ID"/></container>
-                                <container style="th"><label text="匹配度"/></container>
-                                <container style="th"><label text="状态"/></container>
-                            </container>
-                        </container>
-                        <container style="tbody">
-                            <section-iterate name="MatchesIterate" list="recentMatches" entry="match">
-                                <widgets>
-                                    <container style="tr">
-                                        <container style="td"><label text="${match.supplyListingId ?: '暂无数据'}"/></container>
-                                        <container style="td"><label text="${match.demandListingId ?: '暂无数据'}"/></container>
-                                        <container style="td"><label text="${(match.matchScore ?: 0.0) * 100}%"/></container>
-                                        <container style="td"><label text="${match.status ?: '未知'}"/></container>
-                                    </container>
-                                </widgets>
-                            </section-iterate>
-                        </container>
-                    </container>
-                </container>
-            </row-col>
-        </container-row>
-
-        <!-- 快速操作 -->
-        <container-row>
-            <row-col lg="12">
-                <label text="快速操作" type="h4"/>
+        <!-- 筛选表单 -->
+        <container style="margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
+            <container style="font-size: 1.25rem; font-weight: 500; margin-bottom: 8px;">
+                <label text="筛选条件"/>
+            </container>
+            <form-single name="FilterForm" method="get">
                 <container-row>
-                    <row-col lg="3" md="6">
-                        <link url="../Supply/CreateSupply" text="发布供应" btn-type="primary"/>
+                    <row-col lg="8" md="8" sm="12">
+                        <field name="merchantId">
+                            <default-field title="商户ID">
+                                <text-line size="30" default-value="${filterMerchant}"/>
+                            </default-field>
+                        </field>
                     </row-col>
-                    <row-col lg="3" md="6">
-                        <link url="../Demand/CreateDemand" text="发布需求" btn-type="info"/>
-                    </row-col>
-                    <row-col lg="3" md="6">
-                        <link url="../Matching" text="查看匹配" btn-type="success"/>
-                    </row-col>
-                    <row-col lg="3" md="6">
-                        <link url="../Chat" text="AI助手" btn-type="warning"/>
+                    <row-col lg="4" md="4" sm="12">
+                        <field name="submit">
+                            <default-field title="">
+                                <submit text="应用筛选"/>
+                            </default-field>
+                        </field>
                     </row-col>
                 </container-row>
+            </form-single>
+        </container>
+
+        <!-- 统计数据区域 -->
+        <container style="font-size: 1.5rem; font-weight: 500; margin-bottom: 16px;">
+            <label text="数据统计"/>
+        </container>
+        <container-row>
+            <row-col lg="3" md="6" sm="12">
+                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
+                    <label style="font-size: 1.25rem; color: #1976d2;" text="活跃供应"/>
+                    <label style="font-size: 2rem; font-weight: bold; color: #1976d2; margin: 8px 0;"
+                           text="${stats.activeSupplyListings ?: 0}"/>
+                    <label style="font-size: 0.875rem; color: #616161;"
+                           text="总计：${stats.totalSupplyListings ?: 0}"/>
+                </container>
+            </row-col>
+            <row-col lg="3" md="6" sm="12">
+                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
+                    <label style="font-size: 1.25rem; color: #4caf50;" text="活跃需求"/>
+                    <label style="font-size: 2rem; font-weight: bold; color: #4caf50; margin: 8px 0;"
+                           text="${stats.activeDemandListings ?: 0}"/>
+                    <label style="font-size: 0.875rem; color: #616161;"
+                           text="总计：${stats.totalDemandListings ?: 0}"/>
+                </container>
+            </row-col>
+            <row-col lg="3" md="6" sm="12">
+                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
+                    <label style="font-size: 1.25rem; color: #2196f3;" text="匹配总数"/>
+                    <label style="font-size: 2rem; font-weight: bold; color: #2196f3; margin: 8px 0;"
+                           text="${stats.totalMatches ?: 0}"/>
+                    <label style="font-size: 0.875rem; color: #616161;"
+                           text="平均匹配度：${matchingStats?.averageScore != null ? ec.l10n.format(matchingStats.averageScore * 100, '##0.0') + '%' : '—'}"/>
+                </container>
+            </row-col>
+            <row-col lg="3" md="6" sm="12">
+                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
+                    <label style="font-size: 1.25rem; color: #ff9800;" text="Telegram 会话"/>
+                    <label style="font-size: 2rem; font-weight: bold; color: #ff9800; margin: 8px 0;"
+                           text="${telegramStats.totalSessions ?: 0}"/>
+                    <label style="font-size: 0.875rem; color: #616161;"
+                           text="今日新增：${telegramStats.todaySessions ?: 0}"/>
+                </container>
             </row-col>
         </container-row>
+
+        <!-- 次要统计数据 -->
+        <container-row>
+            <row-col lg="3" md="6" sm="12">
+                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
+                    <label style="font-size: 1rem;" text="活跃会话"/>
+                    <label style="font-size: 1.5rem; font-weight: bold; margin: 8px 0;"
+                           text="${telegramStats.activeSessions ?: 0}"/>
+                </container>
+            </row-col>
+            <row-col lg="3" md="6" sm="12">
+                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
+                    <label style="font-size: 1rem;" text="最近匹配得分"/>
+                    <label style="font-size: 1.5rem; font-weight: bold; margin: 8px 0;"
+                           text="${recentMatchesDisplay ? recentMatchesDisplay[0].matchScorePercent + '%' : '—'}"/>
+                </container>
+            </row-col>
+            <row-col lg="3" md="6" sm="12">
+                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
+                    <label style="font-size: 1rem;" text="最近供应"/>
+                    <label style="font-size: 1.5rem; font-weight: bold; margin: 8px 0;"
+                           text="${recentSupplies ? recentSupplies.size() : 0}"/>
+                </container>
+            </row-col>
+            <row-col lg="3" md="6" sm="12">
+                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
+                    <label style="font-size: 1rem;" text="最近需求"/>
+                    <label style="font-size: 1.5rem; font-weight: bold; margin: 8px 0;"
+                           text="${recentDemands ? recentDemands.size() : 0}"/>
+                </container>
+            </row-col>
+        </container-row>
+
+        <container>
+            <label text="Telegram 会话列表" type="h4"/>
+            <container style="table table-striped">
+                <container style="thead">
+                    <container style="tr">
+                        <container style="th"><label text="会话ID"/></container>
+                        <container style="th"><label text="客户/商户"/></container>
+                        <container style="th"><label text="状态"/></container>
+                        <container style="th"><label text="阶段"/></container>
+                        <container style="th"><label text="最后意图"/></container>
+                        <container style="th"><label text="最近消息"/></container>
+                        <container style="th"><label text="更新时间"/></container>
+                    </container>
+                </container>
+                <container style="tbody">
+                    <section-iterate name="TelegramSessionsIterate" list="telegramSessionsDisplay" entry="session">
+                        <widgets>
+                            <container style="tr">
+                                <container style="td"><label text="${session.sessionId ?: '—'}"/></container>
+                                <container style="td"><label text="${session.customerName ?: '—'}"/></container>
+                                <container style="td"><label text="${session.status ?: '—'}"/></container>
+                                <container style="td"><label text="${session.currentPhase ?: '—'}"/></container>
+                                <container style="td"><label text="${session.lastIntent ?: '—'}"/></container>
+                                <container style="td"><label text="${session.lastMessage ?: '—'}"/></container>
+                                <container style="td"><label text="${session.updatedDate ? ec.l10n.format(session.updatedDate, 'yyyy-MM-dd HH:mm') : '—'}"/></container>
+                            </container>
+                        </widgets>
+                    </section-iterate>
+                </container>
+            </container>
+        </container>
+
+        <container>
+            <label text="最新 Telegram 消息" type="h4"/>
+            <container style="table table-striped">
+                <container style="thead">
+                    <container style="tr">
+                        <container style="th"><label text="会话ID"/></container>
+                        <container style="th"><label text="商户"/></container>
+                        <container style="th"><label text="用户消息"/></container>
+                        <container style="th"><label text="AI 回复"/></container>
+                        <container style="th"><label text="意图"/></container>
+                        <container style="th"><label text="时间"/></container>
+                    </container>
+                </container>
+                <container style="tbody">
+                    <section-iterate name="TelegramMessagesIterate" list="recentTelegramMessagesDisplay" entry="message">
+                        <widgets>
+                            <container style="tr">
+                                <container style="td"><label text="${message.sessionId ?: '—'}"/></container>
+                                <container style="td"><label text="${message.merchantName ?: '—'}"/></container>
+                                <container style="td"><label text="${message.content ?: '—'}"/></container>
+                                <container style="td"><label text="${message.aiResponse ?: '—'}"/></container>
+                                <container style="td"><label text="${message.intent ?: '—'}"/></container>
+                                <container style="td"><label text="${message.processedDate ? ec.l10n.format(message.processedDate, 'MM-dd HH:mm') : '—'}"/></container>
+                            </container>
+                        </widgets>
+                    </section-iterate>
+                </container>
+            </container>
+        </container>
+
+        <container>
+            <label text="最近供应" type="h4"/>
+            <container style="table table-striped">
+                <container style="thead">
+                    <container style="tr">
+                        <container style="th"><label text="标题"/></container>
+                        <container style="th"><label text="数量"/></container>
+                        <container style="th"><label text="价格下限"/></container>
+                        <container style="th"><label text="价格上限"/></container>
+                        <container style="th"><label text="状态"/></container>
+                    </container>
+                </container>
+                <container style="tbody">
+                    <section-iterate name="RecentSupplyIterate" list="recentSupplies" entry="supply">
+                        <widgets>
+                            <container style="tr">
+                                <container style="td"><label text="${supply.title ?: '—'}"/></container>
+                                <container style="td"><label text="${supply.quantity ?: '—'}"/></container>
+                                <container style="td"><label text="${supply.priceMin ? ec.l10n.format(supply.priceMin, '###,##0.00') : '—'}"/></container>
+                                <container style="td"><label text="${supply.priceMax ? ec.l10n.format(supply.priceMax, '###,##0.00') : '—'}"/></container>
+                                <container style="td"><label text="${supply.status ?: '—'}"/></container>
+                            </container>
+                        </widgets>
+                    </section-iterate>
+                </container>
+            </container>
+        </container>
+
+        <container>
+            <label text="最近需求" type="h4"/>
+            <container style="table table-striped">
+                <container style="thead">
+                    <container style="tr">
+                        <container style="th"><label text="标题"/></container>
+                        <container style="th"><label text="需求量"/></container>
+                        <container style="th"><label text="预算"/></container>
+                        <container style="th"><label text="状态"/></container>
+                    </container>
+                </container>
+                <container style="tbody">
+                    <section-iterate name="RecentDemandIterate" list="recentDemands" entry="demand">
+                        <widgets>
+                            <container style="tr">
+                                <container style="td"><label text="${demand.title ?: '—'}"/></container>
+                                <container style="td"><label text="${demand.quantity ?: '—'}"/></container>
+                                <container style="td"><label text="${demand.priceMax ? ec.l10n.format(demand.priceMax, '###,##0.00') : '—'}"/></container>
+                                <container style="td"><label text="${demand.status ?: '—'}"/></container>
+                            </container>
+                        </widgets>
+                    </section-iterate>
+                </container>
+            </container>
+        </container>
+
+        <container>
+            <label text="最新撮合结果" type="h4"/>
+            <container style="table table-striped">
+                <container style="thead">
+                    <container style="tr">
+                        <container style="th"><label text="供应"/></container>
+                        <container style="th"><label text="需求"/></container>
+                        <container style="th"><label text="匹配度(%)"/></container>
+                        <container style="th"><label text="状态"/></container>
+                        <container style="th"><label text="时间"/></container>
+                    </container>
+                </container>
+                <container style="tbody">
+                    <section-iterate name="RecentMatchIterate" list="recentMatchesDisplay" entry="match">
+                        <widgets>
+                            <container style="tr">
+                                <container style="td"><label text="${match.supplyTitle ?: '—'}"/></container>
+                                <container style="td"><label text="${match.demandTitle ?: '—'}"/></container>
+                                <container style="td"><label text="${match.matchScorePercent ?: '—'}"/></container>
+                                <container style="td"><label text="${match.status ?: '—'}"/></container>
+                                <container style="td"><label text="${match.suggestedDate ? ec.l10n.format(match.suggestedDate, 'MM-dd HH:mm') : '—'}"/></container>
+                            </container>
+                        </widgets>
+                    </section-iterate>
+                </container>
+            </container>
+        </container>
+
+        <container>
+            <label text="快速操作" type="h4"/>
+            <link url="../Supply/CreateSupply" text="发布新供应" btn-type="primary"/>
+            <link url="../Demand/CreateDemand" text="发布新需求" btn-type="info"/>
+            <link url="../Matching" text="查看撮合结果" btn-type="success"/>
+            <link url="../Chat" text="打开 AI 助手" btn-type="warning"/>
+        </container>
     </widgets>
 </screen>

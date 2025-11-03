@@ -11,6 +11,7 @@
         <subscreens-item name="Demand" menu-title="需求管理" location="component://moqui-marketplace/screen/marketplace/Demand.xml"/>
         <subscreens-item name="Matching" menu-title="智能匹配" location="component://moqui-marketplace/screen/marketplace/Matching.xml"/>
         <subscreens-item name="Chat" menu-title="AI助手" location="component://moqui-marketplace/screen/marketplace/Chat.xml"/>
+        <subscreens-item name="TelegramAdmin" menu-title="Telegram管理" location="component://moqui-marketplace/screen/marketplace/TelegramAdmin.xml"/>
         <subscreens-item name="TestDataInit" menu-title="数据管理" location="component://moqui-marketplace/screen/marketplace/TestDataInit.xml"/>
     </subscreens>
 

@@ -1,141 +1,254 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
-        default-menu-title="AI助手" require-authentication="false">
+        default-menu-title="Telegram对话" require-authentication="false">
 
     <parameter name="merchantId"/>
+    <parameter name="sessionId"/>
 
     <actions>
-        <!-- 获取当前商家信息 -->
         <if condition="!merchantId">
-            <set field="merchantId" from="ec.user.userAccount?.partyId ?: 'DEMO_MERCHANT'"/>
+            <set field="merchantId" value="__ALL__"/>
         </if>
+        <script><![CDATA[
+            import org.moqui.entity.EntityCondition
 
-        <!-- 生成唯一会话ID -->
-        <set field="sessionId" value="LIVECHAT_${System.currentTimeMillis()}_${merchantId}"/>
+            boolean isAllMerchant = !merchantId || merchantId == "__ALL__" || merchantId == "ALL"
+            boolean hasMerchantFilter = (!isAllMerchant && merchantId && merchantId != "__ALL__" && merchantId != "ALL")
+            sessionsList = []
+            conversationTimeline = []
+            selectedSessionInfo = null
+            selectedSessionId = sessionId
+            botUsername = System.getProperty("mcp.telegram.bot.username") ?: System.getProperty("telegram.bot.username") ?: "@待配置"
+            quickReplies = [
+                [value: "我们已收到您的需求，稍后会有专员与您联系。", label: "已收到需求"],
+                [value: "请补充产品规格、数量和期望交付时间，谢谢！", label: "补充规格"],
+                [value: "AI 已完成初步匹配，稍后将推送候选供应商列表。", label: "匹配完成"],
+                [value: "如需电话沟通，请回复您的联系方式，我们会尽快致电。", label: "请求电话"]
+            ]
 
-        <!-- 获取智能推荐数据 -->
-        <service-call name="moqui.mcp.get#SmartRecommendations"
-                      in-map="[merchantId:merchantId, maxResults:4]"
-                      out-map="smartRecs"
-                      ignore-error="true"/>
-        <if condition="!smartRecs.recommendations">
-            <set field="smartRecs.recommendations" from="[
-                [title: '高质量钢材供应商推荐', description: '基于您的历史需求，为您推荐优质钢材供应商', score: 0.92],
-                [title: '建材采购需求匹配', description: '发现3个与您供应能力匹配的建材采购需求', score: 0.88],
-                [title: '物流优化建议', description: '基于地理位置分析，推荐最优配送路线', score: 0.85],
-                [title: '市场趋势分析', description: '本月钢材市场价格上涨，建议及时调整策略', score: 0.80]
-            ]"/>
-        </if>
+            def partyNameCache = [:]
+            Closure<String> getPartyName = { String partyId ->
+                if (!partyId) return ""
+                if (partyNameCache.containsKey(partyId)) return partyNameCache[partyId]
+                def detailFind = ec.entity.find("mantle.party.PartyDetail")
+                    .condition("partyId", partyId)
+                detailFind.disableAuthz()
+                def detail = detailFind.one()
+                String name = detail?.fullName ?: detail?.organizationName ?: detail?.groupName ?: partyId
+                partyNameCache[partyId] = name
+                return name
+            }
+
+            try {
+                def sessionFind = ec.entity.find("mcp.dialog.McpDialogSession")
+                    .condition("sessionId", EntityCondition.ComparisonOperator.LIKE, "telegram%")
+                    .condition("sessionType", "MARKETPLACE")
+                    .orderBy("-lastModifiedDate")
+                    .limit(25)
+                if (!isAllMerchant) sessionFind.condition("merchantId", merchantId)
+                sessionFind.disableAuthz()
+                def rawSessions = sessionFind.list()
+
+                rawSessions.each { sess ->
+                    def lastMessageFind = ec.entity.find("mcp.dialog.McpDialogMessage")
+                        .condition("sessionId", sess.sessionId)
+                        .orderBy("-processedDate")
+                        .limit(1)
+                    lastMessageFind.disableAuthz()
+                    def lastMessage = lastMessageFind.one()
+
+                    sessionsList.add([
+                        sessionId    : sess.sessionId,
+                        displayName  : getPartyName(sess.customerId) ?: getPartyName(sess.merchantId) ?: sess.sessionId,
+                        status       : sess.status ?: "ACTIVE",
+                        currentPhase : sess.currentPhase ?: "待分配",
+                        updatedDate  : sess.lastModifiedDate ?: sess.createdDate,
+                        lastSnippet  : (lastMessage?.content ?: lastMessage?.message ?: lastMessage?.aiResponse ?: "暂无消息")
+                    ])
+
+                    if (!selectedSessionId) {
+                        selectedSessionId = sess.sessionId
+                    }
+                }
+
+                def selectedSession = null
+                if (selectedSessionId) {
+                    selectedSession = rawSessions.find { it.sessionId == selectedSessionId }
+                    if (!selectedSession) {
+                        def selectedFind = ec.entity.find("mcp.dialog.McpDialogSession")
+                            .condition("sessionId", selectedSessionId)
+                        selectedFind.disableAuthz()
+                        selectedSession = selectedFind.one()
+                    }
+                }
+
+                if (selectedSession) {
+                    selectedSessionInfo = [
+                        sessionId     : selectedSession.sessionId,
+                        merchantName  : getPartyName(selectedSession.merchantId),
+                        customerName  : getPartyName(selectedSession.customerId),
+                        status        : selectedSession.status ?: "ACTIVE",
+                        currentPhase  : selectedSession.currentPhase ?: "待分配",
+                        updatedDisplay: selectedSession.lastModifiedDate ? ec.l10n.format(selectedSession.lastModifiedDate, "yyyy-MM-dd HH:mm") :
+                                         (selectedSession.createdDate ? ec.l10n.format(selectedSession.createdDate, "yyyy-MM-dd HH:mm") : "")
+                    ]
+
+                    def messagesFind = ec.entity.find("mcp.dialog.McpDialogMessage")
+                        .condition("sessionId", selectedSession.sessionId)
+                        .orderBy("processedDate")
+                    messagesFind.disableAuthz()
+                    def messageList = messagesFind.list()
+
+                    messageList.each { msg ->
+                        if (msg.message || msg.content) {
+                            conversationTimeline.add([
+                                type     : "user",
+                                text     : (msg.content ?: msg.message),
+                                timestamp: msg.processedDate ?: selectedSession.createdDate,
+                                intent   : msg.intent ?: "用户消息"
+                            ])
+                        }
+                        if (msg.aiResponse) {
+                            conversationTimeline.add([
+                                type     : "assistant",
+                                text     : msg.aiResponse,
+                                timestamp: msg.processedDate ?: selectedSession.lastModifiedDate,
+                                intent   : msg.intent ?: "AI响应"
+                            ])
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                ec.logger.warn("加载Telegram对话数据失败: ${e.message}")
+            }
+        ]]></script>
     </actions>
 
     <widgets>
-        <!-- 传递配置参数给客户端脚本 -->
         <render-mode>
             <text type="html"><![CDATA[
-                <script type="text/javascript">
-                  // 传递服务器端参数给客户端脚本
-                  window.marketplaceChatConfig = {
-                    merchantId: '${merchantId}',
-                    sessionId: '${sessionId}'
-                  };
-                </script>
+                <style>
+                    .chat-wrapper { display: flex; flex-direction: column; gap: 12px; }
+                    .chat-bubble { padding: 12px 16px; border-radius: 12px; max-width: 90%; position: relative; }
+                    .chat-user { margin-left: auto; background: #1976d2; color: #fff; }
+                    .chat-assistant { margin-right: auto; background: #f5f5f5; color: #333; border: 1px solid #e0e0e0; }
+                    .chat-meta { font-size: 0.75rem; color: #9e9e9e; margin-top: 6px; }
+                    .chat-intent { font-size: 0.75rem; color: #616161; display: block; margin-top: 4px; }
+                    .session-item { padding: 12px; border-bottom: 1px solid #eee; }
+                    .session-item:last-child { border-bottom: none; }
+                    .session-active { background: #e3f2fd; border-left: 4px solid #1976d2; }
+                    .session-title { font-weight: 600; display: block; margin-bottom: 4px; color: #1976d2; }
+                    .session-snippet { display: block; color: #616161; font-size: 0.85rem; }
+                </style>
             ]]></text>
         </render-mode>
 
-        <container style="ai-assistant-container">
-            <!-- 英雄区域 -->
-            <container style="hero-section">
-                <label text="🤖 智能AI助手" type="h1" style="margin: 0; font-size: 2.5em;"/>
-                <label text="基于Rocket.Chat的统一聊天平台" type="h3" style="margin: 10px 0; opacity: 0.9;"/>
-                <label text="商家ID: ${merchantId} | 会话: ${sessionId}" type="p" style="margin: 0; opacity: 0.8; font-size: 0.9em;"/>
-            </container>
-
-            <!-- 状态卡片 -->
-            <container-row>
-                <row-col lg="6" md="12">
-                    <container style="status-card">
-                        <label text="📡 LiveChat连接状态" type="h4"/>
-                        <container-row>
-                            <row-col lg="6">
-                                <label text="状态: "/>
-                                <span id="livechat-status" class="status-disconnected">连接中...</span>
-                            </row-col>
-                            <row-col lg="6">
-                                <button class="livechat-button" onclick="openLiveChat()">💬 打开聊天</button>
-                            </row-col>
-                        </container-row>
-                    </container>
-                </row-col>
-                <row-col lg="6" md="12">
-                    <container style="status-card">
-                        <label text="🎯 使用指南" type="h4"/>
-                        <label text="1. 等待右下角出现聊天图标"/>
-                        <label text="2. 点击图标开始与AI对话"/>
-                        <label text="3. AI会自动处理您的询问"/>
-                        <label text="4. 支持供需匹配、市场分析等"/>
-                    </container>
-                </row-col>
-            </container-row>
-
-            <!-- 功能特性 -->
-            <container style="feature-grid">
-                <container style="feature-item">
-                    <div style="feature-icon">🎯</div>
-                    <label text="智能匹配" type="h5"/>
-                    <label text="AI自动分析供需信息，找到最佳匹配"/>
-                </container>
-                <container style="feature-item">
-                    <div style="feature-icon">📊</div>
-                    <label text="数据分析" type="h5"/>
-                    <label text="市场趋势分析，助您做出明智决策"/>
-                </container>
-                <container style="feature-item">
-                    <div style="feature-icon">💬</div>
-                    <label text="实时沟通" type="h5"/>
-                    <label text="24/7在线AI助手，随时为您服务"/>
-                </container>
-                <container style="feature-item">
-                    <div style="feature-icon">🚀</div>
-                    <label text="高效便捷" type="h5"/>
-                    <label text="一键式操作，快速完成业务流程"/>
-                </container>
-            </container>
-
-            <!-- 智能推荐 -->
-            <container style="status-card">
-                <label text="💡 智能推荐" type="h3"/>
-                <section name="RecommendationsSection">
-                    <condition><expression>smartRecs.recommendations</expression></condition>
-                    <widgets>
-                        <section-iterate name="RecommendationsList" list="smartRecs.recommendations" entry="rec">
-                            <widgets>
-                                <container style="recommendation-card">
-                                    <container-row>
-                                        <row-col lg="9">
-                                            <label text="${rec.title}" type="h5" style="margin-bottom: 5px;"/>
-                                            <label text="${rec.description}"/>
-                                        </row-col>
-                                        <row-col lg="3" style="text-align: right;">
-                                            <span class="score-badge">${(rec.score * 100).intValue()}%</span>
-                                        </row-col>
-                                    </container-row>
-                                </container>
-                            </widgets>
-                        </section-iterate>
-                    </widgets>
-                </section>
-            </container>
-
-            <!-- 配置帮助 -->
-            <div id="config-help" class="config-help">
-                <label text="⚠️ LiveChat未正确加载" type="h4"/>
-                <label text="如果您没有看到右下角的聊天图标，请按照以下步骤配置："/>
-                <label text="1. 运行配置脚本: ./runtime/component/moqui-mcp/configure_livechat.sh"/>
-                <label text="2. 在Rocket.Chat管理后台启用Omnichannel功能"/>
-                <label text="3. 配置LiveChat设置"/>
-                <label text="4. 刷新此页面"/>
-            </div>
+        <container style="card card-body" id="telegram-chat-panel">
+            <label text="Telegram 会话管理" type="h2"/>
+            <label text="Bot: ${botUsername}" type="p"/>
         </container>
+
+        <form-single name="TelegramChatFilter" method="get">
+            <field name="merchantId">
+                <default-field title="商户ID">
+                    <text-line size="20" default-value="${merchantId == '__ALL__' ? '' : merchantId}" placeholder="留空查看全部商户"/>
+                </default-field>
+            </field>
+            <field name="submit">
+                <default-field title="">
+                    <submit text="筛选会话" style="btn btn-outline-primary"/>
+                </default-field>
+            </field>
+        </form-single>
+
+        <container-row>
+            <row-col lg="4" md="12">
+                <container style="card card-body">
+                    <label text="会话列表" type="h4"/>
+                    <if condition="!sessionsList">
+                        <label text="暂无Telegram会话" type="p" style="text-muted"/>
+                    </if>
+                    <section-iterate name="TelegramSessionList" list="sessionsList" entry="sess">
+                        <widgets>
+                            <container style="session-item${sess.sessionId == selectedSessionInfo?.sessionId ? ' session-active' : ''}">
+                                <link url="Chat?sessionId=${sess.sessionId}${hasMerchantFilter ? '&amp;merchantId='+merchantId : ''}" text="${sess.displayName}" style="session-title"/>
+                                <label text="${sess.lastSnippet ?: '—'}" type="span" style="session-snippet"/>
+                                <label text="${sess.updatedDate ? ec.l10n.format(sess.updatedDate, 'yyyy-MM-dd HH:mm') : ''}" type="span" style="chat-meta"/>
+                                <label text="状态：${sess.status} · 阶段：${sess.currentPhase}" type="span" style="chat-meta"/>
+                            </container>
+                        </widgets>
+                    </section-iterate>
+                </container>
+            </row-col>
+
+            <row-col lg="8" md="12">
+                <container style="card card-body">
+                    <if condition="!selectedSessionInfo">
+                        <label text="请选择左侧会话查看详情" type="p"/>
+                    </if>
+                    <if condition="selectedSessionInfo">
+                        <label text="会话ID：${selectedSessionInfo.sessionId}" type="h4"/>
+                        <label text="商户：${selectedSessionInfo.merchantName ?: '—'} / 客户：${selectedSessionInfo.customerName ?: '—'}" type="p"/>
+                        <label text="状态：${selectedSessionInfo.status} · 阶段：${selectedSessionInfo.currentPhase} · 更新时间：${selectedSessionInfo.updatedDisplay ?: '—'}" type="p" style="text-muted"/>
+
+                        <container style="chat-wrapper">
+                            <if condition="!conversationTimeline">
+                                <label text="暂无聊天记录" type="p" style="text-muted"/>
+                            </if>
+                            <section-iterate name="TelegramConversation" list="conversationTimeline" entry="msg">
+                                <widgets>
+                                    <container style="chat-bubble ${msg.type == 'user' ? 'chat-user' : 'chat-assistant'}">
+                                        <label text="${msg.text ?: '—'}" type="p"/>
+                                        <label text="${msg.intent ?: ''}" type="span" style="chat-intent"/>
+                                        <label text="${msg.timestamp ? ec.l10n.format(msg.timestamp, 'yyyy-MM-dd HH:mm') : ''}" type="span" style="chat-meta"/>
+                                    </container>
+                                </widgets>
+                            </section-iterate>
+                        </container>
+
+                        <if condition="selectedSessionInfo.sessionId">
+                            <form-single name="TelegramManualReply" service-name="moqui.mcp.send#TelegramMessage" transition="">
+                                <field name="sessionId">
+                                    <default-field title="">
+                                        <hidden default-value="${selectedSessionInfo.sessionId}"/>
+                                    </default-field>
+                                </field>
+                                <field name="messageText">
+                                    <default-field title="手动回复">
+                                        <text-area rows="3" cols="60" placeholder="请输入要发送给客户的消息…"/>
+                                    </default-field>
+                                </field>
+                                <field name="submit">
+                                    <default-field title="">
+                                        <submit text="发送消息" style="btn btn-primary"/>
+                                    </default-field>
+                                </field>
+                            </form-single>
+
+                            <form-single name="TelegramQuickReply" service-name="moqui.mcp.send#TelegramMessage" transition="">
+                                <field name="sessionId">
+                                    <default-field title="">
+                                        <hidden default-value="${selectedSessionInfo.sessionId}"/>
+                                    </default-field>
+                                </field>
+                                <field name="messageText">
+                                    <default-field title="快速回复">
+                                        <drop-down allow-empty="false">
+                                            <list-options list="quickReplies" key-field="value" text-field="label"/>
+                                        </drop-down>
+                                    </default-field>
+                                </field>
+                                <field name="submit">
+                                    <default-field title="">
+                                        <submit text="发送快速回复" style="btn btn-outline-primary"/>
+                                    </default-field>
+                                </field>
+                            </form-single>
+                        </if>
+                    </if>
+                </container>
+            </row-col>
+        </container-row>
     </widgets>
 </screen>

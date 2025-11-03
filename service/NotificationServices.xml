@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <service verb="send" noun="MatchNotificationViaChannel" authenticate="false">
+        <description>记录撮合通知并返回发送结果（占位实现）</description>
+        <in-parameters>
+            <parameter name="recipientPartyId" required="true"/>
+            <parameter name="matchId" required="true"/>
+            <parameter name="notificationType" default-value="NEW_MATCH"/>
+            <parameter name="channel" default-value="ROCKETCHAT"/>
+            <parameter name="messageTemplate"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="notificationId"/>
+            <parameter name="sent" type="Boolean"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                String content = messageTemplate ?: "您有新的撮合更新，请登录平台查看详情。"
+
+                notificationId = ec.entity.sequencedIdPrimary
+
+                def notificationValue = ec.entity.makeValue("marketplace.notification.MatchNotification")
+                        .setFields([
+                                notificationId    : notificationId,
+                                recipientPartyId  : recipientPartyId,
+                                matchId           : matchId,
+                                notificationType  : notificationType ?: "NEW_MATCH",
+                                channel           : channel ?: "ROCKETCHAT",
+                                messageContent    : content,
+                                status            : "SENT",
+                                sentDate          : ec.user.nowTimestamp,
+                                createdDate       : ec.user.nowTimestamp
+                        ], true, null, false)
+
+                notificationValue.create()
+
+                sent = true
+            ]]></script>
+        </actions>
+    </service>
+
+</services>

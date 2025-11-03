@@ -33,7 +33,64 @@
             <parameter name="matchedCount" type="Integer"><description>立即找到的匹配数</description></parameter>
         </out-parameters>
         <actions>
-            <service-call name="marketplace.MarketplaceServices.create#ListingWithTags" in-map="context" out-map="context"/>
+            <script><![CDATA[
+                import org.moqui.marketplace.matching.SmartMatchingEngine
+                import java.sql.Timestamp
+                import java.math.BigDecimal
+
+                def logger = org.slf4j.LoggerFactory.getLogger("marketplace.createListing")
+
+                if (!listingType || !publisherId || !publisherType || !title || !category) {
+                    ec.message.addError("缺少必填字段：listingType、publisherId、publisherType、title、category")
+                    return
+                }
+
+                Timestamp nowTs = ec.user.nowTimestamp
+                Timestamp validFromTs = validFrom ?: nowTs
+                Integer expireHoursInt = (expiryHours ?: 48) as Integer
+                Timestamp validThruTs = validThru ?: new Timestamp(validFromTs.time + expireHoursInt * 3600_000L)
+
+                def listingValue = ec.entity.makeValue("marketplace.listing.Listing")
+                listingValue.setFields([
+                    listingType      : listingType,
+                    publisherId      : publisherId,
+                    publisherType    : publisherType,
+                    title            : title,
+                    description      : description,
+                    category         : category,
+                    subCategory      : subCategory,
+                    quantity         : quantity,
+                    quantityUnit     : quantityUnit ?: "份",
+                    priceMin         : priceMin,
+                    priceMax         : priceMax,
+                    currencyUomId    : "CNY",
+                    locationDesc     : locationDesc,
+                    geoPointId       : geoPointId,
+                    deliveryRange    : deliveryRange ?: 5.0,
+                    expiryHours      : expireHoursInt,
+                    validFrom        : validFromTs,
+                    validThru        : validThruTs,
+                    status           : "ACTIVE",
+                    imageUrls        : imageUrls,
+                    createdDate      : nowTs,
+                    createdByUserId  : ec.user.userId
+                ], true, null, false)
+
+                listingValue.create()
+                listingId = listingValue.listingId
+
+                def engine = new SmartMatchingEngine(ec)
+                BigDecimal scoreThreshold = new BigDecimal("0.6")
+                List<Map<String, Object>> matches = []
+                try {
+                    matches = engine.findMatchesForListing(listingId, 5, scoreThreshold)
+                } catch (Exception e) {
+                    logger.warn("Failed to run immediate matching for listing ${listingId}", e)
+                }
+
+                matchedCount = matches.size()
+                context.matches = matches
+            ]]></script>
         </actions>
     </service>
 
@@ -43,12 +100,14 @@
             <parameter name="listingType"/>
             <parameter name="category"/>
             <parameter name="subCategory"/>
+            <parameter name="publisherId"/>
             <parameter name="tagIds" type="List"/>
             <parameter name="geoPointId"/>
             <parameter name="maxDistance" type="BigDecimal" default="5.0"/>
             <parameter name="priceMin" type="BigDecimal"/>
             <parameter name="priceMax" type="BigDecimal"/>
             <parameter name="status" default-value="ACTIVE"/>
+            <parameter name="orderBy"/>
             <parameter name="pageIndex" type="Integer" default="0"/>
             <parameter name="pageSize" type="Integer" default="20"/>
         </in-parameters>
@@ -57,7 +116,34 @@
             <parameter name="totalCount" type="Integer"/>
         </out-parameters>
         <actions>
-            <service-call name="marketplace.MarketplaceServices.search#ListingsAdvanced" in-map="context" out-map="context"/>
+            <script><![CDATA[
+                def find = ec.entity.makeFind("marketplace.listing.Listing")
+                if (listingType) find.condition("listingType", listingType)
+                if (category) find.condition("category", category)
+                if (subCategory) find.condition("subCategory", subCategory)
+                if (publisherId) find.condition("publisherId", publisherId)
+                if (status) { find.condition("status", status) } else { find.condition("status", "ACTIVE") }
+
+                Integer size = (pageSize ?: 20) as Integer
+                Integer index = (pageIndex ?: 0) as Integer
+                if (size > 0) {
+                    find.offset(index * size).limit(size)
+                }
+
+                String orderByField = orderBy ?: "-createdDate"
+                find.orderBy(orderByField)
+
+                def results = find.list()
+                context.listings = results
+
+                def countFind = ec.entity.makeFind("marketplace.listing.Listing")
+                if (listingType) countFind.condition("listingType", listingType)
+                if (category) countFind.condition("category", category)
+                if (subCategory) countFind.condition("subCategory", subCategory)
+                if (publisherId) countFind.condition("publisherId", publisherId)
+                if (status) { countFind.condition("status", status) } else { countFind.condition("status", "ACTIVE") }
+                totalCount = countFind.count()
+            ]]></script>
         </actions>
     </service>
 
@@ -69,6 +155,71 @@
         </in-parameters>
         <actions>
             <service-call name="update#marketplace.listing.Listing" in-map="[listingId: listingId, status: status]"/>
+        </actions>
+    </service>
+
+    <service verb="update" noun="Listing">
+        <description>更新供需信息详情</description>
+        <in-parameters>
+            <parameter name="listingId" required="true"/>
+            <parameter name="title"/>
+            <parameter name="description"/>
+            <parameter name="category"/>
+            <parameter name="subCategory"/>
+            <parameter name="quantity" type="BigDecimal"/>
+            <parameter name="quantityUnit"/>
+            <parameter name="priceMin" type="BigDecimal"/>
+            <parameter name="priceMax" type="BigDecimal"/>
+            <parameter name="deliveryRange" type="BigDecimal"/>
+            <parameter name="status"/>
+        </in-parameters>
+        <actions>
+            <script><![CDATA[
+                def listing = ec.entity.find("marketplace.listing.Listing")
+                    .condition("listingId", listingId)
+                    .forUpdate(true)
+                    .one()
+                if (!listing) {
+                    ec.message.addError("供需信息不存在")
+                    return
+                }
+
+                ['title','description','category','subCategory','quantity','quantityUnit',
+                 'priceMin','priceMax','deliveryRange','status'].each { field ->
+                    if (context.containsKey(field) && context[field] != null) {
+                        listing.set(field, context[field])
+                    }
+                }
+                listing.store()
+                context.updatedListing = listing
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="delete" noun="Listing">
+        <description>删除供需信息（默认软删除）</description>
+        <in-parameters>
+            <parameter name="listingId" required="true"/>
+            <parameter name="hardDelete" type="Boolean" default="false"/>
+        </in-parameters>
+        <actions>
+            <script><![CDATA[
+                def listing = ec.entity.find("marketplace.listing.Listing")
+                    .condition("listingId", listingId)
+                    .forUpdate(true)
+                    .one()
+                if (!listing) {
+                    ec.message.addError("供需信息不存在")
+                    return
+                }
+                if (hardDelete) {
+                    listing.delete()
+                } else {
+                    listing.set("status", "CANCELLED")
+                    listing.set("validThru", ec.user.nowTimestamp)
+                    listing.store()
+                }
+            ]]></script>
         </actions>
     </service>
 
@@ -201,6 +352,76 @@
         </actions>
     </service>
 
+    <service verb="search" noun="MatchOrders">
+        <description>查询撮合订单</description>
+        <in-parameters>
+            <parameter name="sellerId"/>
+            <parameter name="buyerId"/>
+            <parameter name="status"/>
+            <parameter name="pageIndex" type="Integer" default="0"/>
+            <parameter name="pageSize" type="Integer" default="20"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="orders" type="List"/>
+            <parameter name="totalCount" type="Integer"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                def find = ec.entity.makeFind("marketplace.order.MatchOrder")
+                if (sellerId) find.condition("sellerId", sellerId)
+                if (buyerId) find.condition("buyerId", buyerId)
+                if (status) find.condition("status", status)
+
+                Integer size = (pageSize ?: 20) as Integer
+                Integer index = (pageIndex ?: 0) as Integer
+                if (size > 0) {
+                    find.offset(index * size).limit(size)
+                }
+                find.orderBy("-confirmedDate")
+                orders = find.list()
+
+                def countFind = ec.entity.makeFind("marketplace.order.MatchOrder")
+                if (sellerId) countFind.condition("sellerId", sellerId)
+                if (buyerId) countFind.condition("buyerId", buyerId)
+                if (status) countFind.condition("status", status)
+                totalCount = countFind.count()
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="update" noun="MatchOrder">
+        <description>更新撮合订单</description>
+        <in-parameters>
+            <parameter name="orderId" required="true"/>
+            <parameter name="status"/>
+            <parameter name="deliveryMethod"/>
+            <parameter name="deliveryAddress"/>
+            <parameter name="deliveryTime" type="Timestamp"/>
+        </in-parameters>
+        <actions>
+            <script><![CDATA[
+                def order = ec.entity.find("marketplace.order.MatchOrder")
+                    .condition("orderId", orderId)
+                    .forUpdate(true)
+                    .one()
+                if (!order) {
+                    ec.message.addError("订单不存在")
+                    return
+                }
+                ['status','deliveryMethod','deliveryAddress','deliveryTime'].each { field ->
+                    if (context.containsKey(field) && context[field] != null) {
+                        order.set(field, context[field])
+                    }
+                }
+                if (status == "COMPLETED") {
+                    order.set("completedDate", ec.user.nowTimestamp)
+                }
+                order.store()
+                context.order = order
+            ]]></script>
+        </actions>
+    </service>
+
     <service verb="rate" noun="MatchOrder">
         <description>对订单进行评价</description>
         <in-parameters>
@@ -301,6 +522,36 @@
 
     <!-- ==================== 标签管理服务 ==================== -->
 
+    <service verb="search" noun="Tags">
+        <description>搜索标签列表</description>
+        <in-parameters>
+            <parameter name="tagType"/>
+            <parameter name="keyword"/>
+            <parameter name="parentTagId"/>
+            <parameter name="isActive"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="tags" type="List"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                def find = ec.entity.makeFind("marketplace.tag.Tag")
+                def cf = ec.entity.conditionFactory
+                if (tagType) find.condition("tagType", tagType)
+                if (parentTagId) find.condition("parentTagId", parentTagId)
+                if (isActive) find.condition("isActive", isActive)
+                if (keyword) {
+                    find.condition(cf.makeCondition([
+                            cf.makeCondition("tagName", "like", "%${keyword}%"),
+                            cf.makeCondition("tagNameEn", "like", "%${keyword}%")
+                    ], org.moqui.entity.EntityCondition.JoinOperator.OR))
+                }
+                find.orderBy("sortOrder")
+                tags = find.list()
+            ]]></script>
+        </actions>
+    </service>
+
     <service verb="extract" noun="TagsFromText">
         <description>从文本中提取标签（使用AI）</description>
         <in-parameters>
@@ -329,6 +580,26 @@
                 <service-call name="create#marketplace.listing.ListingTag"
                              in-map="[listingId: listingId, tagId: tagId, source: source, createdDate: ec.user.nowTimestamp]"/>
             </iterate>
+        </actions>
+    </service>
+
+    <service verb="upload" noun="Image">
+        <description>上传图片（占位实现，返回示例URL）</description>
+        <in-parameters>
+            <parameter name="fileName"/>
+            <parameter name="mimeType"/>
+            <parameter name="imageData"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="imageUrl"/>
+            <parameter name="message"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                String name = fileName ?: "marketplace-image.png"
+                imageUrl = "https://cdn.example.com/marketplace/${System.currentTimeMillis()}/${name}"
+                message = "占位上传成功，返回示例图片URL。"
+            ]]></script>
         </actions>
     </service>
 
@@ -415,6 +686,289 @@
             <set field="averageRating" value="4.3" type="BigDecimal"/>
             <set field="totalReviews" value="28" type="Long"/>
         </actions>
+    </service>
+
+    <service verb="get" noun="MatchingStats">
+        <description>获取匹配统计信息</description>
+        <in-parameters>
+            <parameter name="merchantId"/>
+            <parameter name="listingId"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="totalMatches" type="Long"/>
+            <parameter name="averageScore" type="BigDecimal"/>
+            <parameter name="recentMatches" type="List"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                import java.math.BigDecimal
+                import java.math.RoundingMode
+
+                def matchFind = ec.entity.makeFind("marketplace.match.Match")
+
+                def cf = ec.entity.conditionFactory
+
+                if (listingId) {
+                    matchFind.condition(ec.entity.conditionFactory.makeCondition([
+                            cf.makeCondition("supplyListingId", listingId),
+                            cf.makeCondition("demandListingId", listingId)
+                    ], org.moqui.entity.EntityCondition.JoinOperator.OR))
+                }
+
+                if (merchantId) {
+                    def listings = ec.entity.find("marketplace.listing.Listing")
+                            .condition("publisherId", merchantId)
+                            .list()
+                    Set<String> listingIds = listings.collect { it.get("listingId") } as Set<String>
+                    if (listingIds) {
+                        matchFind.condition(ec.entity.conditionFactory.makeCondition([
+                                cf.makeCondition("supplyListingId", org.moqui.entity.EntityCondition.IN, listingIds),
+                                cf.makeCondition("demandListingId", org.moqui.entity.EntityCondition.IN, listingIds)
+                        ], org.moqui.entity.EntityCondition.JoinOperator.OR))
+                    }
+                }
+
+                def matchList = matchFind.orderBy("-suggestedDate").list()
+                totalMatches = matchList?.size() ?: 0
+
+                if (totalMatches) {
+                    BigDecimal total = matchList.collect { it.get("matchScore") ?: BigDecimal.ZERO }
+                            .inject(BigDecimal.ZERO) { BigDecimal acc, BigDecimal val -> acc.add(val) }
+                    averageScore = total.divide(new BigDecimal(totalMatches), 4, RoundingMode.HALF_UP)
+                } else {
+                    averageScore = BigDecimal.ZERO
+                }
+
+                recentMatches = matchList ? matchList.take(10).collect {
+                    [
+                            matchId         : it.get("matchId"),
+                            supplyListingId : it.get("supplyListingId"),
+                            demandListingId : it.get("demandListingId"),
+                            matchScore      : it.get("matchScore"),
+                            status          : it.get("status"),
+                            suggestedDate   : it.get("suggestedDate")
+                    ]
+                } : []
+            ]]></script>
+        </actions>
+    </service>
+
+    <!-- ==================== 项目化能力扩展 ==================== -->
+
+    <service verb="detect" noun="ProjectType" authenticate="false">
+        <description>基于文本关键字的项目类型识别服务</description>
+        <in-parameters>
+            <parameter name="userDescription" required="true"/>
+            <parameter name="inputType" default-value="TEXT"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="isProject" type="Boolean"/>
+            <parameter name="projectType"/>
+            <parameter name="confidence" type="BigDecimal"/>
+            <parameter name="extractedRequirements" type="Map"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            import java.math.BigDecimal
+
+            String description = (userDescription ?: "").toLowerCase()
+            List<String> exhibitionKeywords = ["展台","搭建","会展","展览","布展","展位","展会"]
+            List<String> renovationKeywords = ["装修","改造","翻新","设计","施工","家装","工装"]
+
+            int exhibitionCount = exhibitionKeywords.count { description.contains(it) }
+            int renovationCount = renovationKeywords.count { description.contains(it) }
+
+            BigDecimal keywordScore = BigDecimal.ZERO
+            String detectedType = null
+
+            if (exhibitionCount > 0 || renovationCount > 0) {
+                if (exhibitionCount >= renovationCount) {
+                    detectedType = "EXHIBITION_SETUP"
+                    keywordScore = new BigDecimal(Math.min(exhibitionCount * 0.2, 0.9))
+                } else {
+                    detectedType = "RENOVATION"
+                    keywordScore = new BigDecimal(Math.min(renovationCount * 0.2, 0.9))
+                }
+            }
+
+            isProject = detectedType != null
+            projectType = detectedType ?: "NOT_PROJECT"
+            confidence = isProject ? keywordScore.max(new BigDecimal("0.6")) : BigDecimal.ZERO
+
+            extractedRequirements = ec.service.sync().name("marketplace.MarketplaceServices.extract#ProjectRequirements")
+                .parameters([description: userDescription, projectType: projectType]).call().extractedRequirements
+        ]]></script></actions>
+    </service>
+
+    <service verb="extract" noun="ProjectRequirements" authenticate="false">
+        <description>简单提取项目描述中的关键信息</description>
+        <in-parameters>
+            <parameter name="description" required="true"/>
+            <parameter name="projectType"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="extractedRequirements" type="Map"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            Map<String, Object> requirements = [
+                originalDescription: description,
+                projectType        : projectType ?: "UNKNOWN",
+                keywords           : description.findAll(/\p{IsHan}+/)
+            ]
+            extractedRequirements = requirements
+        ]]></script></actions>
+    </service>
+
+    <service verb="call" noun="HiveMindApi" authenticate="true">
+        <description>通用的HiveMind API调用封装（Java HttpClient）</description>
+        <in-parameters>
+            <parameter name="endpoint" required="true"/>
+            <parameter name="requestData" type="Map" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="statusCode" type="Integer"/>
+            <parameter name="response" type="Map"/>
+            <parameter name="success" type="Boolean"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+        import java.net.URI
+        import java.net.http.HttpClient
+        import java.net.http.HttpRequest
+        import java.net.http.HttpResponse
+        import groovy.json.JsonOutput
+        import groovy.json.JsonSlurper
+
+        HttpClient client = HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(15))
+            .build()
+
+        String requestBodyJson = JsonOutput.toJson(requestData)
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(endpoint))
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(requestBodyJson))
+            .build()
+
+        HttpResponse<String> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString())
+        statusCode = httpResponse.statusCode()
+        if (statusCode == 200) {
+            String body = httpResponse.body() ?: ""
+            response = body ? (Map) new JsonSlurper().parseText(body) : [:]
+            success = true
+        } else {
+            success = false
+            ec.logger.error("HiveMind API 调用失败: ${statusCode} -> ${httpResponse.body()}")
+        }
+        ]]></script></actions>
+    </service>
+
+    <service verb="create" noun="HiveMindProject" authenticate="true">
+        <description>创建Moqui WorkEffort项目并同步至HiveMind</description>
+        <in-parameters>
+            <parameter name="listingId" required="true"/>
+            <parameter name="clientName" required="true"/>
+            <parameter name="projectType" default-value="EXHIBITION_SETUP"/>
+            <parameter name="estimatedBudget" type="BigDecimal"/>
+            <parameter name="venueSize"/>
+            <parameter name="displayType"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="workEffortId"/>
+            <parameter name="hiveMindProjectId"/>
+            <parameter name="success" type="Boolean"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            def workEffortResult = ec.service.sync().name("create#mantle.work.effort.WorkEffort").parameters([
+                workEffortTypeId  : "PROJECT",
+                workEffortName    : "会展搭建项目-${clientName}",
+                description       : "展台面积:${venueSize ?: '未提供'}; 展示类型:${displayType ?: '未提供'}",
+                estimatedWorkCost : estimatedBudget,
+                statusId          : "WIP_PROJECT_ACTIVE"
+            ]).call()
+            workEffortId = workEffortResult.workEffortId
+
+            def apiResult = ec.service.sync().name("marketplace.MarketplaceServices.call#HiveMindApi").parameters([
+                endpoint   : "https://hivemind.example.com/api/projects",
+                requestData: [
+                    name        : "会展搭建项目-${clientName}",
+                    description : "Moqui WorkEffort: ${workEffortId}",
+                    clientInfo  : clientName,
+                    venueDetails: [size: venueSize, type: displayType],
+                    budget      : estimatedBudget
+                ]
+            ]).call()
+
+            if (!(apiResult.success ?: false)) {
+                ec.message.addError("HiveMind 项目同步失败")
+                success = false
+                return
+            }
+
+            hiveMindProjectId = apiResult.response?.projectId
+
+            ec.entity.makeValue("marketplace.project.HiveMindProject").setAll([
+                workEffortId      : workEffortId,
+                hiveMindProjectId : hiveMindProjectId,
+                listingId         : listingId,
+                syncStatus        : "SYNCED",
+                lastSyncDate      : ec.user.nowTimestamp
+            ]).create()
+
+            if (projectType == "EXHIBITION_SETUP") {
+                ec.entity.makeValue("marketplace.project.ExhibitionProject").setAll([
+                    workEffortId          : workEffortId,
+                    venueSize             : venueSize,
+                    displayType           : displayType
+                ]).create()
+            }
+
+            ec.service.sync().name("marketplace.project.generate#ExhibitionTasks").parameters([
+                workEffortId      : workEffortId,
+                hiveMindProjectId : hiveMindProjectId
+            ]).call()
+
+            success = true
+        ]]></script></actions>
+    </service>
+
+    <service verb="generate" noun="ExhibitionTasks" authenticate="true">
+        <description>为会展项目生成标准化任务并同步HiveMind</description>
+        <in-parameters>
+            <parameter name="workEffortId" required="true"/>
+            <parameter name="hiveMindProjectId"/>
+        </in-parameters>
+        <actions><script><![CDATA[
+            List<Map> taskTemplates = [
+                [name: "需求确认", description: "确认展台尺寸、风格、预算", sequenceNum: 1],
+                [name: "设计方案", description: "提供3D设计图和材料清单", sequenceNum: 2],
+                [name: "材料采购", description: "订购展台结构和装饰材料", sequenceNum: 3],
+                [name: "现场搭建", description: "按照设计图进行现场组装", sequenceNum: 4],
+                [name: "验收交付", description: "客户验收确认，项目交付", sequenceNum: 5]
+            ]
+
+            taskTemplates.each { Map task ->
+                def taskResult = ec.service.sync().name("create#mantle.work.effort.WorkEffort").parameters([
+                    parentWorkEffortId : workEffortId,
+                    workEffortTypeId   : "TASK",
+                    workEffortName     : task.name,
+                    description        : task.description,
+                    sequenceNum        : task.sequenceNum,
+                    statusId           : "WIP_TASK_CREATED"
+                ]).call()
+
+                if (hiveMindProjectId) {
+                    ec.service.sync().name("marketplace.MarketplaceServices.call#HiveMindApi").parameters([
+                        endpoint   : "https://hivemind.example.com/api/projects/${hiveMindProjectId}/tasks",
+                        requestData: [
+                            name             : task.name,
+                            description      : task.description,
+                            sequenceNumber   : task.sequenceNum,
+                            moquiWorkEffortId: taskResult.workEffortId
+                        ]
+                    ]).call()
+                }
+            }
+        ]]></script></actions>
     </service>
 
 </services>

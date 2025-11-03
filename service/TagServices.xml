@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <service verb="extract" noun="TagsUsingAI" authenticate="false">
+        <description>基于简单关键词规则提取标签（占位实现，可替换为真实AI调用）</description>
+        <in-parameters>
+            <parameter name="text" required="true"/>
+            <parameter name="category"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="tagIds" type="List"/>
+            <parameter name="tags" type="List"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                import org.moqui.entity.EntityCondition
+
+                String source = text?.toLowerCase() ?: ""
+                Set<String> matched = new LinkedHashSet<>()
+
+                if (source.contains("蔬菜") || source.contains("vegetable")) matched.add("CAT_VEGETABLE")
+                if (source.contains("叶菜")) matched.add("CAT_VEG_LEAF")
+                if (source.contains("根茎")) matched.add("CAT_VEG_ROOT")
+                if (source.contains("瓜") || source.contains("果蔬")) matched.add("CAT_VEG_FRUIT")
+
+                if (source.contains("猪肉") || source.contains("pork")) matched.add("CAT_MEAT_PORK")
+                if (source.contains("牛肉") || source.contains("beef")) matched.add("CAT_MEAT_BEEF")
+                if (source.contains("羊肉") || source.contains("mutton")) matched.add("CAT_MEAT_MUTTON")
+                if (source.contains("鸡") || source.contains("禽")) matched.add("CAT_MEAT_POULTRY")
+
+                if (source.contains("水果") || source.contains("fruit")) matched.add("CAT_FRUIT")
+                if (source.contains("海鲜") || source.contains("seafood")) matched.add("CAT_SEAFOOD")
+
+                if (source.contains("新鲜") || source.contains("fresh")) matched.add("ATTR_FRESH")
+                if (source.contains("有机") || source.contains("organic")) matched.add("ATTR_ORGANIC")
+                if (source.contains("绿色")) matched.add("ATTR_GREEN")
+                if (source.contains("批发") || source.contains("wholesale")) matched.add("ATTR_WHOLESALE")
+                if (source.contains("零售") || source.contains("retail")) matched.add("ATTR_RETAIL")
+
+                if (source.contains("当天") || source.contains("今日") || source.contains("今天") || source.contains("today")) matched.add("TIME_TODAY")
+                if (source.contains("明天") || source.contains("次日") || source.contains("tomorrow")) matched.add("TIME_TOMORROW")
+                if (source.contains("长期") || source.contains("long-term")) matched.add("TIME_LONGTERM")
+
+                if (source.contains("配送") || source.contains("delivery")) matched.add("DELIVERY_YES")
+                if (source.contains("自提") || source.contains("pickup")) matched.add("DELIVERY_PICKUP")
+
+                if (category) {
+                    matched = matched.findAll { it.startsWith(category as String) || it == category } as Set<String>
+                }
+
+                List<String> tagIdList = matched ? matched as List<String> : []
+                List tagsList = []
+                if (tagIdList) {
+                    tagsList = ec.entity.find("marketplace.tag.Tag")
+                            .condition("tagId", EntityCondition.IN, tagIdList)
+                            .orderBy("sortOrder")
+                            .list()
+                            .collect { it.getMap() }
+                }
+
+                tagIds = tagIdList
+                tags = tagsList
+            ]]></script>
+        </actions>
+    </service>
+
+</services>

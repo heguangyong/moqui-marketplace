@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <service verb="update" noun="OrderStats" authenticate="false">
+        <description>根据最新订单情况更新买卖双方的画像统计</description>
+        <in-parameters>
+            <parameter name="sellerId"/>
+            <parameter name="buyerId"/>
+        </in-parameters>
+        <actions>
+            <script><![CDATA[
+                def nowTs = ec.user.nowTimestamp
+
+                Closure updateProfile = { String partyId, String profileType ->
+                    if (!partyId) return
+                    def profile = ec.entity.find("marketplace.profile.UserProfile")
+                            .condition("partyId", partyId)
+                            .forUpdate(true)
+                            .one()
+                    if (!profile) {
+                        profile = ec.entity.makeValue("marketplace.profile.UserProfile")
+                        profile.setFields([
+                                partyId      : partyId,
+                                profileType  : profileType ?: "MERCHANT",
+                                creditScore  : new BigDecimal("0.80"),
+                                totalListings: 0L,
+                                totalMatches : 0L,
+                                totalOrders  : 0L,
+                                createdDate  : nowTs
+                        ], true, null, false)
+                        profile.create()
+                    }
+
+                    Long totalOrders = (profile.get("totalOrders") ?: 0L) as Long
+                    profile.set("totalOrders", totalOrders + 1L)
+
+                    Long totalMatches = (profile.get("totalMatches") ?: 0L) as Long
+                    profile.set("totalMatches", totalMatches + 1L)
+
+                    profile.set("lastActiveDate", nowTs)
+                    profile.store()
+                }
+
+                if (sellerId) updateProfile(sellerId, "MERCHANT")
+                if (buyerId) updateProfile(buyerId, "CUSTOMER")
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="update" noun="CreditScore" authenticate="false">
+        <description>根据新评分调整信用分（简单加权模型）</description>
+        <in-parameters>
+            <parameter name="partyId" required="true"/>
+            <parameter name="newRating" type="Integer" required="true"/>
+        </in-parameters>
+        <actions>
+            <script><![CDATA[
+                def profile = ec.entity.find("marketplace.profile.UserProfile")
+                        .condition("partyId", partyId)
+                        .forUpdate(true)
+                        .one()
+                if (!profile) {
+                    ec.logger.warn("Profile not found for party ${partyId}, skipping credit update")
+                    return
+                }
+
+                BigDecimal existing = profile.get("creditScore") ?: new BigDecimal("0.80")
+                BigDecimal incoming = new BigDecimal(newRating ?: 0).divide(new BigDecimal("5.0"), 4, BigDecimal.ROUND_HALF_UP)
+                BigDecimal updated = existing.multiply(new BigDecimal("0.7")).add(incoming.multiply(new BigDecimal("0.3")))
+
+                if (updated.compareTo(BigDecimal.ONE) > 0) updated = BigDecimal.ONE
+                if (updated.compareTo(BigDecimal.ZERO) < 0) updated = BigDecimal.ZERO
+
+                profile.set("creditScore", updated)
+                profile.set("lastActiveDate", ec.user.nowTimestamp)
+                profile.store()
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="get" noun="ProfileWithPreferences" authenticate="false">
+        <description>获取用户画像及标签偏好</description>
+        <in-parameters>
+            <parameter name="partyId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="profile" type="Map"/>
+            <parameter name="tagPreferences" type="Map"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                import groovy.json.JsonSlurper
+
+                def profileValue = ec.entity.find("marketplace.profile.UserProfile")
+                        .condition("partyId", partyId)
+                        .one()
+
+                if (!profileValue) {
+                    profileValue = ec.entity.makeValue("marketplace.profile.UserProfile")
+                            .setFields([
+                                    partyId    : partyId,
+                                    profileType: "MERCHANT",
+                                    creditScore: new BigDecimal("0.80"),
+                                    createdDate: ec.user.nowTimestamp
+                            ], true, null, false)
+                    profileValue.create()
+                }
+
+                Map<String, Object> prefMap = [:]
+                if (profileValue.get("tagPreferences")) {
+                    try {
+                        prefMap = new JsonSlurper().parseText(profileValue.get("tagPreferences")) as Map<String, Object>
+                    } catch (Exception e) {
+                        ec.logger.warn("Failed to parse tag preferences for ${partyId}: ${e.message}")
+                    }
+                }
+
+                profile = profileValue.getMap()
+                tagPreferences = prefMap ?: [:]
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="async" noun="RebuildProfile" authenticate="false">
+        <description>异步触发画像重建</description>
+        <in-parameters>
+            <parameter name="partyId" required="true"/>
+        </in-parameters>
+        <actions>
+            <service-call name="marketplace.ProfileServices.rebuild#ProfileFromBehaviors" in-map="context"/>
+        </actions>
+    </service>
+
+    <service verb="rebuild" noun="ProfileFromBehaviors" authenticate="false">
+        <description>基于历史行为重新计算用户画像统计</description>
+        <in-parameters>
+            <parameter name="partyId" required="true"/>
+        </in-parameters>
+        <actions>
+            <script><![CDATA[
+                def behaviors = ec.entity.find("marketplace.profile.UserBehavior")
+                        .condition("partyId", partyId)
+                        .list()
+
+                long publishCount = behaviors.count { it.get("behaviorType") == "PUBLISH" }
+                long contactCount = behaviors.count { it.get("behaviorType") == "CONTACT" }
+                long orderCount = behaviors.count { it.get("behaviorType") == "ORDER" }
+
+                def profile = ec.entity.find("marketplace.profile.UserProfile")
+                        .condition("partyId", partyId)
+                        .forUpdate(true)
+                        .one()
+
+                if (!profile) {
+                    profile = ec.entity.makeValue("marketplace.profile.UserProfile")
+                            .setFields([
+                                    partyId    : partyId,
+                                    profileType: "MERCHANT",
+                                    creditScore: new BigDecimal("0.80"),
+                                    createdDate: ec.user.nowTimestamp
+                            ], true, null, false)
+                    profile.create()
+                }
+
+                profile.set("totalListings", publishCount)
+                profile.set("totalMatches", contactCount)
+                profile.set("totalOrders", orderCount)
+
+                if (behaviors) {
+                    def lastBehavior = behaviors.max { it.get("createdDate") ?: ec.user.nowTimestamp }
+                    profile.set("lastActiveDate", lastBehavior?.get("createdDate"))
+                }
+
+                profile.store()
+            ]]></script>
+        </actions>
+    </service>
+
+</services>

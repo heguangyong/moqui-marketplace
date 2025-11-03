@@ -31,6 +31,28 @@
 
 ---
 
+## 🧭 2025-11 战略更新：B 端闭环体验
+
+### 目标用户聚焦
+- **客群**: 社区内的小微企业主（菜厂、农贸、餐饮、小型加工企业）
+- **核心需求**: 让老板在一个受监管的闭环中掌握每一次供需匹配的进展
+- **管控方式**: 将每个撮合流程映射为 HiveMind 项目，确保可追踪、可审计
+
+### MVP 渠道策略
+- **首个对话入口**: Telegram 机器人，先做最小可用“供需撮合”闭环
+- **待支持能力**:
+  - 文字消息：中文/英文双语
+  - 语音识别：接入现有语音转写（中英文自动识别）
+  - 图片识别：读取货品图片获取品类、标签信息
+- **后续拓展**: 在 MVP 稳定后复用同一套交互编排，扩展到 Rocket.Chat、WeChat、Twitter 等渠道
+
+### HiveMind 项目化管理
+- **意图**: 把“沟通 → 撮合 → 跟进”的每个节点写入 HiveMind，形成真正的项目流水线
+- **数据落库**: AI 会话元数据、客户需求、撮合状态同步存放到 HiveMind 数据模型
+- **能力演进**: 逐步增加里程碑、责任人、提醒机制，支撑更复杂的 B 端项目协同
+
+---
+
 ## 🏗️ 技术架构
 
 ### 整体架构图
@@ -645,116 +667,60 @@ public String generateMatchReason(...) {
 
 ## 🎯 下一步行动计划
 
-### 立即验证（今天）
+### Sprint 0：Telegram MVP 闭环（当前迭代焦点）
 
-1. **构建组件**
-```bash
-cd E:\moqui-framework
-./gradlew :runtime:component:moqui-marketplace:classes
-```
+1. **后端稳定性自检**
+   - 确认 `MarketplaceServices`/`MatchingServices` 等核心接口可通过 REST 调用
+   - 利用 `MarketplaceDemoData.xml` 导入基础样例，验证 `find#Matches`、`create#Listing`、`confirm#Match` 正常返回
 
-2. **启动Moqui**
-```bash
-./gradlew run
-```
+2. **Telegram 机器人对接**
+   - 复用既有 `testing-tools/test_multimodal_telegram.sh` 流程，梳理命令 → 服务映射
+   - 实现关键指令/意图：
+     - `/supply` 发布供应 → `marketplace.SupplyDemandServices.create#SupplyListing`
+     - `/demand` 发布需求 → `marketplace.SupplyDemandServices.create#DemandListing`
+     - `/match {listingId}` 查找匹配 → `marketplace.MarketplaceServices.find#Matches`
+     - `/confirm {matchId}` 确认撮合 → `marketplace.MarketplaceServices.confirm#Match`
+   - 设计失败提示与重试机制，确保老板能理解每一步状态
 
-3. **检查数据表**
-   - 访问 http://localhost:8080
-   - 登录: john.doe / moqui
-   - Tools → Entity → Data Find
-   - 查找 `marketplace.listing.Listing`
+3. **多模态输入兜底方案**
+   - **语音识别**: 调用 `Speech_To_Text_Integration_Report.md` 中的识别链路，将转写结果回填到对话
+   - **图像识别**: 使用 `Image_Recognition_Integration_Report.md` 中的识别流程，为图片打标签并提示可发布供应
+   - 在机器人消息中标注“系统自动识别结果 + 人工确认指引”，保持透明度
 
-4. **加载初始数据**
-```bash
-./gradlew load -Ptypes=seed,demo
-```
+4. **HiveMind 项目同步（基础版）**
+   - 每次供需撮合在 Telegram 内形成闭环时，调用 HiveMind API 创建/更新项目节点：
+     - `阶段`：沟通中 / 匹配中 / 已确认 / 已完成
+     - `关键数据`：listingId、matchId、联系人、图片/语音附件链接
+   - 先使用占位字段写入，自定义字段映射待后续细化
 
-5. **测试匹配算法**
-   - Tools → Service → Run Service
-   - 服务名: `marketplace.MarketplaceServices.find#Matches`
-   - 参数: `{"listingId": "SUPPLY_001"}`
+### Sprint 1：体验提升 & 数据固化
 
-### 本周计划（Week 1）
+1. **对话模版化**
+   - 梳理 B 端老板常见问法，沉淀成意图 + 引导模版（中文为主，英文备用）
+   - 引入“项目化提示”，让 AI 主动告知“已为您开一个 HiveMind 项目跟踪此次撮合”
 
-#### 方案A: 快速验证（推荐）
+2. **多模态自动触发**
+   - 语音/图片上传后自动解释并建议下一步操作，比如自动生成 supply 草稿
+   - 对无法识别的情况输出 fallback：请求用户输入文本补充
 
-**目标**: 验证核心匹配逻辑是否正常工作
+3. **HiveMind 数据模型映射**
+   - 定义 HiveMind 中的项目结构：阶段、负责人、动作日志、所需文件
+   - 将 Moqui 内部实体（Listing/Match/Order）与 HiveMind 项目标记联动，确保双向追踪
 
-1. **创建REST API定义** (需补充)
-   - 文件: `service/marketplace.rest.xml`
-   - 暴露: listing, match, order等接口
+### 后续通道拓展（Rocket.Chat / WeChat / Twitter）
 
-2. **编写Groovy服务实现** (需补充)
-   - 实现: `MarketplaceServices.groovy`
-   - 调用: `SmartMatchingEngine.java`
+1. **抽象对话编排层**
+   - 将 Telegram 中的命令解析、上下文存储、错误处理封装为通用模块
+   - 未来各渠道只需实现适配器，将消息转换为统一意图格式
 
-3. **Postman测试**
-```bash
-# 创建供应
-POST http://localhost:8080/rest/s1/marketplace/listing
-Authorization: Bearer {jwt_token}
-Content-Type: application/json
+2. **渠道特性适配**
+   - Rocket.Chat：支持企业内多成员协同
+   - WeChat：侧重语音、图片输入，适配小程序或企业微信
+   - Twitter：面向公开运营，可能只暴露部分咨询/订阅功能
 
-{
-  "listingType": "SUPPLY",
-  "publisherId": "MERCHANT_001",
-  "publisherType": "MERCHANT",
-  "title": "新鲜菠菜20斤",
-  "category": "VEGETABLE",
-  "subCategory": "CAT_VEG_LEAF",
-  "quantity": 20,
-  "priceMin": 3,
-  "priceMax": 5,
-  "locationDesc": "常平镇",
-  "geoPointId": "GEO_MERCHANT_001",
-  "deliveryRange": 3
-}
-
-# 查找匹配
-POST http://localhost:8080/rest/s1/marketplace/match/find
-{
-  "listingId": "SUPPLY_001",
-  "maxResults": 5
-}
-```
-
-#### 方案B: 完整AI Agent实现
-
-**目标**: 实现端到端对话式交互
-
-1. **搭建Rocket.Chat** (1天)
-```bash
-# Docker方式
-docker run -d --name rocketchat \
-  -p 3000:3000 \
-  -e ROOT_URL=http://localhost:3000 \
-  -e MONGO_URL=mongodb://mongo:27017/rocketchat \
-  rocket.chat:latest
-
-docker run -d --name mongo \
-  -p 27017:27017 \
-  mongo:6
-```
-
-2. **创建MCP Server项目** (2-3天)
-```bash
-mkdir moqui-mcp-server
-cd moqui-mcp-server
-npm init -y
-npm install @modelcontextprotocol/sdk express axios
-```
-
-参考: `docs/MCP_INTEGRATION_GUIDE.md` 中的完整代码
-
-3. **实现RocketChat Bridge** (1-2天)
-```bash
-mkdir rocketchat-bridge
-# 参考集成指南中的代码
-```
-
-4. **集成Claude API** (1天)
-   - 申请API Key: https://console.anthropic.com/
-   - 配置环境变量: `ANTHROPIC_API_KEY`
+3. **监管合规与审计**
+   - 随着渠道扩展，强化 HiveMind 审计：记录渠道来源、对话摘要、关键决策节点
+   - 为 B 端企业提供“项目汇总报表”及“历史撮合归档”
 
 ---
 

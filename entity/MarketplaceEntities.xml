@@ -471,4 +471,41 @@
         </relationship>
     </entity>
 
+    <!-- ==================== HiveMind 集成扩展 ==================== -->
+
+    <entity entity-name="HiveMindProject" package="marketplace.project">
+        <field name="workEffortId" type="id" is-pk="true"/>
+        <field name="hiveMindProjectId" type="text-medium"/>
+        <field name="listingId" type="id"/>
+        <field name="syncStatus" type="text-short" default="PENDING"/>
+        <field name="lastSyncDate" type="date-time"/>
+        <field name="syncErrorMessage" type="text-long"/>
+        <relationship type="one" related="mantle.work.effort.WorkEffort"/>
+        <relationship type="one" related="marketplace.listing.Listing"/>
+    </entity>
+
+    <entity entity-name="ExhibitionProject" package="marketplace.project">
+        <field name="workEffortId" type="id" is-pk="true"/>
+        <field name="venueSize" type="text-medium"/>
+        <field name="displayType" type="text-medium"/>
+        <field name="venueLocation" type="text-medium"/>
+        <field name="specialRequirements" type="text-long"/>
+        <field name="designStylePreference" type="text-medium"/>
+        <relationship type="one" related="mantle.work.effort.WorkEffort"/>
+    </entity>
+
+    <entity entity-name="PartyCapability" package="marketplace.supplier">
+        <field name="partyId" type="id" is-pk="true"/>
+        <field name="capabilityTypeId" type="id" is-pk="true"/>
+        <field name="proficiencyLevel" type="text-short"/>
+        <field name="yearsOfExperience" type="number-integer"/>
+        <field name="maxProjectBudget" type="currency-amount"/>
+        <field name="geographicScope" type="text-medium"/>
+        <field name="lastAssessmentDate" type="date-time"/>
+        <relationship type="one" related="mantle.party.Party"/>
+        <index name="PARTY_CAPABILITY_IDX" unique="false">
+            <index-field name="capabilityTypeId"/>
+        </index>
+    </entity>
+
 </entities>

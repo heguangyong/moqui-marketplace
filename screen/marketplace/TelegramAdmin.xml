@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
+        default-menu-title="Telegram管理"
+        require-authentication="false">
+
+    <parameter name="sessionId"/>
+    <parameter name="messageId"/>
+    <parameter name="statusFilter"/>
+    <parameter name="typeFilter"/>
+
+    <actions>
+        <script><![CDATA[
+            import org.moqui.entity.EntityCondition
+            import java.sql.Timestamp
+            import java.time.LocalDate
+            import java.time.ZoneId
+
+            // 获取统计数据
+            telegramStats = [
+                totalSessions: 0L,
+                activeSessions: 0L,
+                todaySessions: 0L,
+                totalMessages: 0L,
+                todayMessages: 0L
+            ]
+
+            // Bot配置信息
+            botConfig = [
+                botUsername: System.getProperty("mcp.telegram.bot.username") ?: System.getProperty("telegram.bot.username") ?: "@待配置",
+                botToken: System.getProperty("mcp.telegram.bot.token") ?: "待配置",
+                webhookUrl: "https://..." + "/rest/s1/mcp/telegram"
+            ]
+
+            try {
+                // 会话统计
+                EntityCondition telegramCondition = ec.entity.conditionFactory.makeCondition("sessionId", EntityCondition.ComparisonOperator.LIKE, "telegram%")
+
+                def totalSessionsFind = ec.entity.find("mcp.dialog.McpDialogSession")
+                    .condition(telegramCondition)
+                    .condition("sessionType", "MARKETPLACE")
+                totalSessionsFind.disableAuthz()
+                telegramStats.totalSessions = totalSessionsFind.count() ?: 0L
+
+                def activeSessionsFind = ec.entity.find("mcp.dialog.McpDialogSession")
+                    .condition(telegramCondition)
+                    .condition("sessionType", "MARKETPLACE")
+                    .condition("status", "ACTIVE")
+                activeSessionsFind.disableAuthz()
+                telegramStats.activeSessions = activeSessionsFind.count() ?: 0L
+
+                Timestamp startOfDay = Timestamp.valueOf(LocalDate.now(ZoneId.systemDefault()).atStartOfDay())
+                def todaySessionsFind = ec.entity.find("mcp.dialog.McpDialogSession")
+                    .condition(telegramCondition)
+                    .condition("sessionType", "MARKETPLACE")
+                    .condition("createdDate", EntityCondition.ComparisonOperator.GREATER_THAN_EQUAL_TO, startOfDay)
+                todaySessionsFind.disableAuthz()
+                telegramStats.todaySessions = todaySessionsFind.count() ?: 0L
+
+                // 消息统计
+                def totalMessagesFind = ec.entity.find("mcp.dialog.McpDialogMessage")
+                    .condition("sessionId", EntityCondition.ComparisonOperator.LIKE, "telegram%")
+                totalMessagesFind.disableAuthz()
+                telegramStats.totalMessages = totalMessagesFind.count() ?: 0L
+
+                def todayMessagesFind = ec.entity.find("mcp.dialog.McpDialogMessage")
+                    .condition("sessionId", EntityCondition.ComparisonOperator.LIKE, "telegram%")
+                    .condition("processedDate", EntityCondition.ComparisonOperator.GREATER_THAN_EQUAL_TO, startOfDay)
+                todayMessagesFind.disableAuthz()
+                telegramStats.todayMessages = todayMessagesFind.count() ?: 0L
+
+            } catch (Exception e) {
+                ec.logger.warn("Telegram统计数据获取失败: ${e.message}")
+            }
+
+            // 获取会话列表
+            sessionsList = []
+            try {
+                def sessionsFind = ec.entity.find("mcp.dialog.McpDialogSession")
+                    .condition("sessionId", EntityCondition.ComparisonOperator.LIKE, "telegram%")
+                    .condition("sessionType", "MARKETPLACE")
+
+                if (statusFilter && statusFilter != "ALL") {
+                    sessionsFind.condition("status", statusFilter)
+                }
+
+                sessionsFind.orderBy("-lastModifiedDate")
+                    .limit(20)
+                sessionsFind.disableAuthz()
+
+                for (session in sessionsFind.list()) {
+                    // 获取最后一条消息
+                    def lastMessageFind = ec.entity.find("mcp.dialog.McpDialogMessage")
+                        .condition("sessionId", session.sessionId)
+                        .orderBy("-processedDate")
+                        .limit(1)
+                    lastMessageFind.disableAuthz()
+                    def lastMessage = lastMessageFind.one()
+
+                    // 获取用户信息
+                    def customerName = "未知用户"
+                    if (session.customerId) {
+                        def customer = ec.entity.find("mantle.party.PartyDetail")
+                            .condition("partyId", session.customerId)
+                            .disableAuthz()
+                            .one()
+                        customerName = customer?.fullName ?: customer?.organizationName ?: session.customerId
+                    }
+
+                    sessionsList.add([
+                        sessionId: session.sessionId,
+                        customerName: customerName,
+                        currentPhase: session.currentPhase ?: "待分配",
+                        status: session.status ?: "ACTIVE",
+                        lastModifiedDate: session.lastModifiedDate ?: session.createdDate,
+                        lastMessage: lastMessage?.content ?: lastMessage?.message ?: "—",
+                        lastIntent: lastMessage?.intent ?: "—",
+                        createdDate: session.createdDate
+                    ])
+                }
+            } catch (Exception e) {
+                ec.logger.warn("获取Telegram会话列表失败: ${e.message}")
+            }
+
+            // 获取消息列表
+            messagesList = []
+            try {
+                def messagesFind = ec.entity.find("mcp.dialog.McpDialogMessage")
+                    .condition("sessionId", EntityCondition.ComparisonOperator.LIKE, "telegram%")
+
+                if (sessionId) {
+                    messagesFind.condition("sessionId", sessionId)
+                }
+
+                messagesFind.orderBy("-processedDate")
+                    .limit(30)
+                messagesFind.disableAuthz()
+
+                for (message in messagesFind.list()) {
+                    def sessionInfo = ec.entity.find("mcp.dialog.McpDialogSession")
+                        .condition("sessionId", message.sessionId)
+                        .disableAuthz()
+                        .one()
+
+                    messagesList.add([
+                        messageId: message.messageId,
+                        sessionId: message.sessionId,
+                        messageType: message.messageType ?: "TEXT",
+                        content: message.content ?: message.message ?: "—",
+                        aiResponse: message.aiResponse ?: "—",
+                        intent: message.intent ?: "—",
+                        processedDate: message.processedDate,
+                        sessionPhase: sessionInfo?.currentPhase ?: "—"
+                    ])
+                }
+            } catch (Exception e) {
+                ec.logger.warn("获取Telegram消息列表失败: ${e.message}")
+            }
+        ]]></script>
+    </actions>
+
+    <widgets>
+        <container>
+            <label text="Telegram Bot 管理中心" type="h2"/>
+            <label text="智能供需平台 - Telegram 机器人后台管理" type="p"/>
+        </container>
+
+        <!-- Bot配置信息 -->
+        <container style="card card-body">
+            <label text="Bot配置信息" type="h4"/>
+            <container-row>
+                <row-col lg="4" md="6" sm="12">
+                    <label text="Bot用户名: ${botConfig.botUsername}" type="p"/>
+                </row-col>
+                <row-col lg="4" md="6" sm="12">
+                    <label text="Token状态: ${botConfig.botToken.length() > 10 ? '已配置' : '未配置'}" type="p"/>
+                </row-col>
+                <row-col lg="4" md="6" sm="12">
+                    <label text="Webhook: ${botConfig.webhookUrl}" type="p"/>
+                </row-col>
+            </container-row>
+        </container>
+
+        <!-- 统计面板 -->
+        <container-row>
+            <row-col lg="2" md="4" sm="6">
+                <container style="card card-body text-center">
+                    <label text="总会话数" type="h6"/>
+                    <label text="${telegramStats.totalSessions}" type="h3" style="text-primary"/>
+                </container>
+            </row-col>
+            <row-col lg="2" md="4" sm="6">
+                <container style="card card-body text-center">
+                    <label text="活跃会话" type="h6"/>
+                    <label text="${telegramStats.activeSessions}" type="h3" style="text-success"/>
+                </container>
+            </row-col>
+            <row-col lg="2" md="4" sm="6">
+                <container style="card card-body text-center">
+                    <label text="今日新增" type="h6"/>
+                    <label text="${telegramStats.todaySessions}" type="h3" style="text-info"/>
+                </container>
+            </row-col>
+            <row-col lg="2" md="4" sm="6">
+                <container style="card card-body text-center">
+                    <label text="总消息数" type="h6"/>
+                    <label text="${telegramStats.totalMessages}" type="h3" style="text-warning"/>
+                </container>
+            </row-col>
+            <row-col lg="2" md="4" sm="6">
+                <container style="card card-body text-center">
+                    <label text="今日消息" type="h6"/>
+                    <label text="${telegramStats.todayMessages}" type="h3" style="text-danger"/>
+                </container>
+            </row-col>
+            <row-col lg="2" md="4" sm="6">
+                <container style="card card-body text-center">
+                    <label text="平均响应" type="h6"/>
+                    <label text="&lt; 2秒" type="h3" style="text-muted"/>
+                </container>
+            </row-col>
+        </container-row>
+
+        <!-- 筛选表单 -->
+        <form-single name="FilterForm" method="get">
+            <field name="statusFilter">
+                <default-field title="状态筛选">
+                    <drop-down>
+                        <option key="" text="全部状态"/>
+                        <option key="ACTIVE" text="活跃"/>
+                        <option key="INACTIVE" text="非活跃"/>
+                        <option key="COMPLETED" text="已完成"/>
+                    </drop-down>
+                </default-field>
+            </field>
+            <field name="sessionId">
+                <default-field title="会话ID">
+                    <text-line size="30"/>
+                </default-field>
+            </field>
+            <field name="submit">
+                <default-field title="">
+                    <submit text="筛选"/>
+                </default-field>
+            </field>
+        </form-single>
+
+        <!-- 会话列表 -->
+        <container>
+            <label text="Telegram 会话管理" type="h4"/>
+            <container style="table table-striped">
+                <container style="thead">
+                    <container style="tr">
+                        <container style="th"><label text="会话ID"/></container>
+                        <container style="th"><label text="用户"/></container>
+                        <container style="th"><label text="当前阶段"/></container>
+                        <container style="th"><label text="状态"/></container>
+                        <container style="th"><label text="最后消息"/></container>
+                        <container style="th"><label text="最后意图"/></container>
+                        <container style="th"><label text="更新时间"/></container>
+                        <container style="th"><label text="操作"/></container>
+                    </container>
+                </container>
+                <container style="tbody">
+                    <section-iterate name="SessionsIterate" list="sessionsList" entry="session">
+                        <widgets>
+                            <container style="tr">
+                                <container style="td">
+                                    <link url="TelegramAdmin?sessionId=${session.sessionId}" text="${session.sessionId}" btn-type="link"/>
+                                </container>
+                                <container style="td"><label text="${session.customerName}"/></container>
+                                <container style="td"><label text="${session.currentPhase}"/></container>
+                                <container style="td">
+                                    <label text="${session.status}" style="${session.status == 'ACTIVE' ? 'badge badge-success' : 'badge badge-secondary'}"/>
+                                </container>
+                                <container style="td">
+                                    <label text="${session.lastMessage.length() > 50 ? session.lastMessage.substring(0, 50) + '...' : session.lastMessage}"/>
+                                </container>
+                                <container style="td"><label text="${session.lastIntent}"/></container>
+                                <container style="td">
+                                    <label text="${session.lastModifiedDate ? ec.l10n.format(session.lastModifiedDate, 'MM-dd HH:mm') : '—'}"/>
+                                </container>
+                                <container style="td">
+                                    <link url="TelegramAdmin?sessionId=${session.sessionId}" text="查看详情" btn-type="outline-primary" size="sm"/>
+                                </container>
+                            </container>
+                        </widgets>
+                    </section-iterate>
+                </container>
+            </container>
+        </container>
+
+        <!-- 消息列表 -->
+        <if condition="sessionId">
+            <container>
+                <label text="会话消息详情 (${sessionId})" type="h4"/>
+                <container style="table table-striped">
+                    <container style="thead">
+                        <container style="tr">
+                            <container style="th"><label text="时间"/></container>
+                            <container style="th"><label text="类型"/></container>
+                            <container style="th"><label text="用户消息"/></container>
+                            <container style="th"><label text="AI回复"/></container>
+                            <container style="th"><label text="意图"/></container>
+                            <container style="th"><label text="阶段"/></container>
+                        </container>
+                    </container>
+                    <container style="tbody">
+                        <section-iterate name="MessagesIterate" list="messagesList" entry="message">
+                            <widgets>
+                                <container style="tr">
+                                    <container style="td">
+                                        <label text="${message.processedDate ? ec.l10n.format(message.processedDate, 'MM-dd HH:mm:ss') : '—'}"/>
+                                    </container>
+                                    <container style="td">
+                                        <label text="${message.messageType}" style="badge badge-info"/>
+                                    </container>
+                                    <container style="td">
+                                        <label text="${message.content.length() > 80 ? message.content.substring(0, 80) + '...' : message.content}"/>
+                                    </container>
+                                    <container style="td">
+                                        <label text="${message.aiResponse.length() > 80 ? message.aiResponse.substring(0, 80) + '...' : message.aiResponse}"/>
+                                    </container>
+                                    <container style="td">
+                                        <label text="${message.intent}" style="badge badge-warning"/>
+                                    </container>
+                                    <container style="td"><label text="${message.sessionPhase}"/></container>
+                                </container>
+                            </widgets>
+                        </section-iterate>
+                    </container>
+                </container>
+            </container>
+        </if>
+
+        <!-- 快速操作 -->
+        <container>
+            <label text="快速操作" type="h4"/>
+            <link url="../TestDataInit" text="数据管理" btn-type="secondary"/>
+            <link url="../Chat" text="AI助手测试" btn-type="info"/>
+            <link url="." text="刷新页面" btn-type="primary"/>
+        </container>
+    </widgets>
+</screen>

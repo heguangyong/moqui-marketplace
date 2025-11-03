@@ -6,6 +6,10 @@
     <depends-on name="mantle-udm"/>
     <depends-on name="mantle-usl"/>
 
+    <!-- 服务文件包含 -->
+    <service-include location="component://moqui-marketplace/service/marketplace.xml"/>
+    <service-include location="component://moqui-marketplace/service/MarketplaceServices.xml"/>
+
     <!-- REST API 资源定义 -->
     <webapp-list>
         <webapp name="webroot">

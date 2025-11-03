@@ -4,71 +4,61 @@
 
     <!-- Marketplace 组件配置 -->
 
-    <default-property name="marketplace.matching.min.score" value="0.6">
-        <description>最小匹配分数阈值（0-1）</description>
-    </default-property>
+    <!-- 最小匹配分数阈值（0-1） -->
+    <default-property name="marketplace.matching.min.score" value="0.6"/>
 
-    <default-property name="marketplace.matching.max.results" value="10">
-        <description>最大匹配结果数量</description>
-    </default-property>
+    <!-- 最大匹配结果数量 -->
+    <default-property name="marketplace.matching.max.results" value="10"/>
 
-    <default-property name="marketplace.geo.max.distance" value="5.0">
-        <description>最大配送距离（公里）</description>
-    </default-property>
+    <!-- 最大配送距离（公里） -->
+    <default-property name="marketplace.geo.max.distance" value="5.0"/>
 
-    <default-property name="marketplace.listing.expire.hours" value="48">
-        <description>供需信息默认有效期（小时）</description>
-    </default-property>
+    <!-- 供需信息默认有效期（小时） -->
+    <default-property name="marketplace.listing.expire.hours" value="48"/>
 
-    <default-property name="marketplace.notification.channel" value="ROCKETCHAT">
-        <description>通知渠道：ROCKETCHAT, SMS, EMAIL</description>
-    </default-property>
+    <!-- 通知渠道：ROCKETCHAT, SMS, EMAIL -->
+    <default-property name="marketplace.notification.channel" value="ROCKETCHAT"/>
 
     <!-- AI 相关配置 -->
-    <default-property name="marketplace.ai.provider" value="CLAUDE">
-        <description>AI提供商：CLAUDE, OLLAMA, GPT</description>
-    </default-property>
+    <!-- AI提供商：OPENAI, CLAUDE, OLLAMA -->
+    <default-property name="marketplace.ai.provider" value="OPENAI"/>
 
-    <default-property name="marketplace.ai.model" value="claude-3-5-sonnet-20241022">
-        <description>AI模型名称</description>
-    </default-property>
+    <!-- AI模型名称（根据AI提供商调整） -->
+    <default-property name="marketplace.ai.model" value="gpt-4o-mini"/>
 
-    <default-property name="marketplace.ai.enable.match.reason" value="true">
-        <description>是否使用AI生成匹配理由</description>
-    </default-property>
+    <!-- AI提供商基础API地址 -->
+    <default-property name="marketplace.ai.api.base" value="https://api.tabcode.cc/openai"/>
 
-    <default-property name="marketplace.ai.enable.tag.extraction" value="true">
-        <description>是否使用AI提取标签</description>
-    </default-property>
+    <!-- AI提供商API密钥，生产环境请使用安全的密钥管理方案 -->
+    <default-property name="marketplace.ai.api.key" value="sk-user-b068399a6e6d4bd97d6af72e"/>
+
+    <!-- 是否使用AI生成匹配理由 -->
+    <default-property name="marketplace.ai.enable.match.reason" value="true"/>
+
+    <!-- 是否使用AI提取标签 -->
+    <default-property name="marketplace.ai.enable.tag.extraction" value="true"/>
 
     <!-- Rocket.Chat 集成配置 -->
-    <default-property name="rocketchat.server.url" value="http://localhost:4000">
-        <description>Rocket.Chat服务器地址</description>
-    </default-property>
+    <!-- Rocket.Chat服务器地址 -->
+    <default-property name="rocketchat.server.url" value="http://localhost:4000"/>
 
-    <default-property name="rocketchat.bot.username" value="marketplace-bot">
-        <description>Rocket.Chat Bot用户名</description>
-    </default-property>
+    <!-- Rocket.Chat Bot用户名 -->
+    <default-property name="rocketchat.bot.username" value="marketplace-bot"/>
 
-    <default-property name="rocketchat.bot.password" value="">
-        <description>Rocket.Chat Bot密码</description>
-    </default-property>
+    <!-- Rocket.Chat Bot密码 -->
+    <default-property name="rocketchat.bot.password" value=""/>
 
-    <default-property name="rocketchat.webhook.token" value="">
-        <description>Rocket.Chat Webhook Token</description>
-    </default-property>
+    <!-- Rocket.Chat Webhook Token -->
+    <default-property name="rocketchat.webhook.token" value=""/>
 
     <!-- MCP Server 配置 -->
-    <default-property name="mcp.server.host" value="localhost">
-        <description>MCP Server主机地址</description>
-    </default-property>
+    <!-- MCP Server主机地址 -->
+    <default-property name="mcp.server.host" value="localhost"/>
 
-    <default-property name="mcp.server.port" value="3001">
-        <description>MCP Server端口</description>
-    </default-property>
+    <!-- MCP Server端口 -->
+    <default-property name="mcp.server.port" value="3001"/>
 
-    <default-property name="mcp.server.enable" value="true">
-        <description>是否启用MCP Server</description>
-    </default-property>
+    <!-- 是否启用MCP Server -->
+    <default-property name="mcp.server.enable" value="true"/>
 
 </moqui-conf>
