@@ -127,4 +127,64 @@
         </resource>
     </resource>
 
+    <!-- 电商管理 -->
+    <resource name="ecommerce">
+        <resource name="products">
+            <method type="get">
+                <entity name="marketplace.ecommerce.EcommerceProduct" operation="list"/>
+            </method>
+            <method type="post">
+                <service name="create#marketplace.ecommerce.EcommerceProduct"/>
+            </method>
+            <resource name="{ecommerceProductId}">
+                <method type="put">
+                    <service name="store#marketplace.ecommerce.EcommerceProduct"/>
+                </method>
+                <method type="get">
+                    <entity name="marketplace.ecommerce.EcommerceProduct" operation="one"/>
+                </method>
+            </resource>
+        </resource>
+
+        <resource name="orders">
+            <method type="post">
+                <service name="marketplace.ecommerce.create#Order"/>
+            </method>
+            <resource name="{ecommerceOrderId}">
+                <method type="get">
+                    <service name="marketplace.EcommerceServices.get#OrderStatus"/>
+                </method>
+                <method type="patch">
+                    <service name="marketplace.EcommerceServices.update#OrderStatus"/>
+                </method>
+            </resource>
+        </resource>
+
+        <resource name="inventory">
+            <resource name="{ecommerceProductId}">
+                <method type="get">
+                    <service name="marketplace.EcommerceServices.get#InventoryStatus"/>
+                </method>
+                <method type="patch">
+                    <service name="marketplace.EcommerceServices.update#ProductInventory"/>
+                </method>
+            </resource>
+        </resource>
+
+        <resource name="recommendations">
+            <method type="get">
+                <entity name="marketplace.ecommerce.EcommerceProduct" operation="list"/>
+            </method>
+        </resource>
+    </resource>
+
+    <!-- Webhook入口 -->
+    <resource name="webhook">
+        <resource name="hivemind">
+            <method type="post">
+                <service name="marketplace.handle#HiveMindWebhook"/>
+            </method>
+        </resource>
+    </resource>
+
 </resource>
