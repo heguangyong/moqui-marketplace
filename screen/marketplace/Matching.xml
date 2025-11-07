@@ -7,6 +7,8 @@
     <parameter name="listingId"/>
     <parameter name="minScore"/>
     <parameter name="maxResults"/>
+    <parameter name="matchMode" default="traditional"/>
+    <parameter name="projectDescription"/>
 
     <actions>
         <if condition="!merchantId">
@@ -22,11 +24,39 @@
             candidateListings = []
             matchResults = []
             matchError = null
+            projectCategory = null
+            projectConfidencePercent = null
+            projectClassificationMessage = null
+
+            def resolvedMatchMode = (matchMode ?: "traditional").toLowerCase()
+            matchMode = resolvedMatchMode in ["project", "traditional"] ? resolvedMatchMode : "traditional"
+
+            if (matchMode == "project" && projectDescription) {
+                try {
+                    Map classifyResult = ec.service.sync().name("mcp.routing.classify#UserIntent").parameters([
+                        userMessage: projectDescription,
+                        messageType: "text"
+                    ]).call()
+                    projectCategory = classifyResult.businessCategory ?: "SUPPLY_DEMAND_MATCHING"
+                    BigDecimal confidence = classifyResult.confidence instanceof BigDecimal ?
+                            (BigDecimal) classifyResult.confidence :
+                            new BigDecimal(classifyResult.confidence?.toString() ?: "0")
+                    confidence = confidence.max(BigDecimal.ZERO).min(BigDecimal.ONE)
+                    projectConfidencePercent = confidence.multiply(new BigDecimal("100")).setScale(0, RoundingMode.HALF_UP)
+                    projectClassificationMessage = "识别为：${projectCategory}，置信度 ${projectConfidencePercent}%"
+                } catch (Exception e) {
+                    ec.logger.warn("项目匹配分类失败: ${e.message}")
+                    projectClassificationMessage = "智能识别暂不可用，请改用传统模式。"
+                }
+            }
+
+            def listingTypeFilter = matchMode == "project" && projectCategory == "HIVEMIND_PROJECT" ? "DEMAND" : null
 
             def listingFind = ec.entity.find("marketplace.listing.Listing")
                 .orderBy("-createdDate")
                 .limit(30)
             if (!isAllMerchant) listingFind.condition("publisherId", merchantId)
+            if (listingTypeFilter) listingFind.condition("listingType", listingTypeFilter)
             listingFind.disableAuthz()
             listingFind.list().each { listing ->
                 candidateListings.add([
@@ -93,6 +123,42 @@
         <container>
             <label text="智能匹配控制台" type="h2"/>
             <label text="当前视角：${displayMerchantName}" type="p"/>
+        </container>
+
+        <container style="q-card q-mb-md">
+            <container style="q-card__section">
+                <form-single name="ModeForm" method="get">
+                    <container-row>
+                        <row-col lg="4" md="6" sm="12">
+                            <field name="matchMode">
+                                <default-field title="匹配模式">
+                                    <drop-down>
+                                        <option key="traditional" text="传统撮合"/>
+                                        <option key="project" text="项目匹配"/>
+                                    </drop-down>
+                                </default-field>
+                            </field>
+                        </row-col>
+                        <row-col lg="4" md="6" sm="12">
+                            <field name="projectDescription" condition="${matchMode == 'project'}">
+                                <default-field title="项目需求描述">
+                                    <text-area rows="2" cols="40" default-value="${projectDescription ?: ''}"/>
+                                </default-field>
+                            </field>
+                        </row-col>
+                        <row-col lg="4" md="12" sm="12" style="align-items:flex-end; display:flex;">
+                            <field name="modeSubmit">
+                                <default-field title="">
+                                    <submit text="应用模式"/>
+                                </default-field>
+                            </field>
+                        </row-col>
+                    </container-row>
+                </form-single>
+                <if condition="${projectClassificationMessage}">
+                    <label text="${projectClassificationMessage}" type="p" style="color:#1976d2;"/>
+                </if>
+            </container>
         </container>
 
         <form-single name="MatchingFilterForm" method="get">

@@ -1,0 +1,23 @@
+{
+  "EXHIBITION_SETUP": [
+    { "name": "需求确认", "description": "确认展台尺寸、风格、预算", "sequenceNum": 1 },
+    { "name": "设计方案", "description": "提供3D设计图和材料清单", "sequenceNum": 2 },
+    { "name": "材料采购", "description": "订购展台结构和装饰材料", "sequenceNum": 3 },
+    { "name": "现场搭建", "description": "按照设计图进行现场组装", "sequenceNum": 4 },
+    { "name": "验收交付", "description": "客户验收确认，项目交付", "sequenceNum": 5 }
+  ],
+  "RENOVATION": [
+    { "name": "现场勘测", "description": "测量面积并记录现状", "sequenceNum": 1 },
+    { "name": "设计方案", "description": "输出平面+效果方案", "sequenceNum": 2 },
+    { "name": "拆除准备", "description": "协调原结构拆除及垃圾清运", "sequenceNum": 3 },
+    { "name": "施工执行", "description": "水电/木作/油漆等施工阶段", "sequenceNum": 4 },
+    { "name": "竣工验收", "description": "组织甲乙双方验收并移交", "sequenceNum": 5 }
+  ],
+  "ENGINEERING": [
+    { "name": "需求评估", "description": "明确工程范围、资源、合规", "sequenceNum": 1 },
+    { "name": "资源调度", "description": "锁定供应商与施工班组", "sequenceNum": 2 },
+    { "name": "材料设备采购", "description": "确认清单并下单、到料", "sequenceNum": 3 },
+    { "name": "现场执行", "description": "落地安装/施工及巡检", "sequenceNum": 4 },
+    { "name": "验收与结算", "description": "收集签字单据并结算", "sequenceNum": 5 }
+  ]
+}

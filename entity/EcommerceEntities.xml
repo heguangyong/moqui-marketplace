@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<entities xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/entity-definition-3.xsd">
+
+    <!-- ==================== 电商分类 ==================== -->
+    <entity entity-name="EcommerceProductCategory" package="marketplace.ecommerce">
+        <description>电商商品分类</description>
+        <field name="productCategoryId" type="id" is-pk="true"/>
+        <field name="parentCategoryId" type="id"/>
+        <field name="categoryName" type="text-medium" enable-audit-log="true"/>
+        <field name="description" type="text-long"/>
+        <field name="status" type="text-short" default="ACTIVE"/>
+        <field name="sequenceNum" type="number-integer" default="100"/>
+        <field name="tenantId" type="id"/>
+        <field name="createdDate" type="date-time"/>
+        <field name="createdByUserId" type="id"/>
+        <field name="lastUpdatedDate" type="date-time"/>
+
+        <relationship type="one" related="EcommerceProductCategory" short-alias="parent">
+            <key-map field-name="parentCategoryId" related="productCategoryId"/>
+        </relationship>
+
+        <index name="ECP_CATEGORY_PARENT_IDX" unique="false">
+            <index-field name="parentCategoryId"/>
+        </index>
+    </entity>
+
+    <!-- ==================== 商品 ==================== -->
+    <entity entity-name="EcommerceProduct" package="marketplace.ecommerce">
+        <description>电商商品信息</description>
+        <field name="ecommerceProductId" type="id" is-pk="true"/>
+        <field name="productCode" type="text-medium"/>
+        <field name="productName" type="text-medium" enable-audit-log="true"/>
+        <field name="description" type="text-long"/>
+        <field name="productCategoryId" type="id"/>
+        <field name="price" type="currency-precise" default-value="0.00"/>
+        <field name="currencyUomId" type="id" default="CNY"/>
+        <field name="stockQuantity" type="number-integer" default-value="0"/>
+        <field name="imageUrl" type="text-medium"/>
+        <field name="status" type="text-short" default="INACTIVE"/>
+        <field name="tenantId" type="id"/>
+        <field name="createdDate" type="date-time"/>
+        <field name="createdByUserId" type="id"/>
+        <field name="lastUpdatedDate" type="date-time"/>
+
+        <relationship type="one" related="EcommerceProductCategory" short-alias="category">
+            <key-map field-name="productCategoryId" related="productCategoryId"/>
+        </relationship>
+
+        <index name="ECP_PRODUCT_CATEGORY_IDX">
+            <index-field name="productCategoryId"/>
+            <index-field name="status"/>
+        </index>
+    </entity>
+
+    <!-- ==================== 客户 ==================== -->
+    <entity entity-name="EcommerceCustomer" package="marketplace.ecommerce">
+        <description>电商客户信息</description>
+        <field name="ecommerceCustomerId" type="id" is-pk="true"/>
+        <field name="partyId" type="id"/>
+        <field name="fullName" type="text-medium"/>
+        <field name="contactEmail" type="text-medium"/>
+        <field name="contactPhone" type="text-medium"/>
+        <field name="preferredChannel" type="text-short"/>
+        <field name="status" type="text-short" default="ACTIVE"/>
+        <field name="tenantId" type="id"/>
+        <field name="createdDate" type="date-time"/>
+        <field name="createdByUserId" type="id"/>
+        <field name="lastUpdatedDate" type="date-time"/>
+
+        <relationship type="one" related="mantle.party.Party" short-alias="party">
+            <key-map field-name="partyId" related="partyId"/>
+        </relationship>
+    </entity>
+
+    <!-- ==================== 购物车 ==================== -->
+    <entity entity-name="EcommerceShoppingCart" package="marketplace.ecommerce">
+        <description>客户购物车</description>
+        <field name="cartId" type="id" is-pk="true"/>
+        <field name="ecommerceCustomerId" type="id"/>
+        <field name="status" type="text-short" default="ACTIVE"/>
+        <field name="totalAmount" type="currency-precise" default-value="0.00"/>
+        <field name="tenantId" type="id"/>
+        <field name="createdDate" type="date-time"/>
+        <field name="createdByUserId" type="id"/>
+        <field name="lastUpdatedDate" type="date-time"/>
+
+        <relationship type="one" related="EcommerceCustomer" short-alias="customer">
+            <key-map field-name="ecommerceCustomerId" related="ecommerceCustomerId"/>
+        </relationship>
+    </entity>
+
+    <!-- ==================== 订单 ==================== -->
+    <entity entity-name="EcommerceOrder" package="marketplace.ecommerce">
+        <description>客户订单</description>
+        <field name="ecommerceOrderId" type="id" is-pk="true"/>
+        <field name="ecommerceCustomerId" type="id"/>
+        <field name="cartId" type="id"/>
+        <field name="orderStatus" type="text-short" default="CREATED"/>
+        <field name="orderTotal" type="currency-precise" default-value="0.00"/>
+        <field name="currencyUomId" type="id" default="CNY"/>
+        <field name="paymentStatus" type="text-short" default="UNPAID"/>
+        <field name="shippingAddress" type="text-long"/>
+        <field name="tenantId" type="id"/>
+        <field name="createdDate" type="date-time"/>
+        <field name="createdByUserId" type="id"/>
+        <field name="lastUpdatedDate" type="date-time"/>
+
+        <relationship type="one" related="EcommerceCustomer" short-alias="customer">
+            <key-map field-name="ecommerceCustomerId" related="ecommerceCustomerId"/>
+        </relationship>
+        <relationship type="one" related="EcommerceShoppingCart" short-alias="cart">
+            <key-map field-name="cartId" related="cartId"/>
+        </relationship>
+    </entity>
+
+    <!-- ==================== 订单明细 ==================== -->
+    <entity entity-name="EcommerceOrderItem" package="marketplace.ecommerce">
+        <description>订单商品明细</description>
+        <field name="orderItemSeqId" type="text-short" is-pk="true"/>
+        <field name="ecommerceOrderId" type="id" is-pk="true"/>
+        <field name="ecommerceProductId" type="id"/>
+        <field name="quantity" type="number-integer" default-value="1"/>
+        <field name="unitPrice" type="currency-precise" default-value="0.00"/>
+        <field name="itemTotal" type="currency-precise" default-value="0.00"/>
+        <field name="tenantId" type="id"/>
+        <field name="createdDate" type="date-time"/>
+        <field name="createdByUserId" type="id"/>
+        <field name="lastUpdatedDate" type="date-time"/>
+
+        <relationship type="one" related="EcommerceOrder" short-alias="order">
+            <key-map field-name="ecommerceOrderId" related="ecommerceOrderId"/>
+        </relationship>
+        <relationship type="one" related="EcommerceProduct" short-alias="product">
+            <key-map field-name="ecommerceProductId" related="ecommerceProductId"/>
+        </relationship>
+    </entity>
+
+    <!-- ==================== 商品评价 ==================== -->
+    <entity entity-name="EcommerceProductReview" package="marketplace.ecommerce">
+        <description>商品评价</description>
+        <field name="productReviewId" type="id" is-pk="true"/>
+        <field name="ecommerceProductId" type="id"/>
+        <field name="ecommerceCustomerId" type="id"/>
+        <field name="rating" type="number-integer"/>
+        <field name="reviewText" type="text-long"/>
+        <field name="reviewDate" type="date-time"/>
+        <field name="status" type="text-short" default="ACTIVE"/>
+        <field name="tenantId" type="id"/>
+        <field name="createdDate" type="date-time"/>
+        <field name="createdByUserId" type="id"/>
+        <field name="lastUpdatedDate" type="date-time"/>
+
+        <relationship type="one" related="EcommerceProduct" short-alias="reviewProduct">
+            <key-map field-name="ecommerceProductId" related="ecommerceProductId"/>
+        </relationship>
+        <relationship type="one" related="EcommerceCustomer" short-alias="reviewCustomer">
+            <key-map field-name="ecommerceCustomerId" related="ecommerceCustomerId"/>
+        </relationship>
+    </entity>
+
+</entities>

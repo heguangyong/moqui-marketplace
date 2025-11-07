@@ -69,15 +69,15 @@
 
     <!-- ==================== 示例地理位置 ==================== -->
 
-    <mantle.humanres.position.GeoPoint geoPointId="GEO_MERCHANT_001"
-                                       latitude="23.0456" longitude="113.7567"
-                                       elevation="50.0" elevationUomId="LEN_m"/>
-    <mantle.humanres.position.GeoPoint geoPointId="GEO_MERCHANT_002"
-                                       latitude="23.0489" longitude="113.7600"
-                                       elevation="50.0" elevationUomId="LEN_m"/>
-    <mantle.humanres.position.GeoPoint geoPointId="GEO_CUSTOMER_001"
-                                       latitude="23.0470" longitude="113.7580"
-                                       elevation="50.0" elevationUomId="LEN_m"/>
+    <moqui.basic.GeoPoint geoPointId="GEO_MERCHANT_001"
+                           latitude="23.0456" longitude="113.7567"
+                           elevation="50.0" elevationUomId="LEN_m"/>
+    <moqui.basic.GeoPoint geoPointId="GEO_MERCHANT_002"
+                           latitude="23.0489" longitude="113.7600"
+                           elevation="50.0" elevationUomId="LEN_m"/>
+    <moqui.basic.GeoPoint geoPointId="GEO_CUSTOMER_001"
+                           latitude="23.0470" longitude="113.7580"
+                           elevation="50.0" elevationUomId="LEN_m"/>
 
     <!-- ==================== 示例供应信息 ==================== -->
 

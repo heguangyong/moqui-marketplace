@@ -1,0 +1,6 @@
+{
+  "url": "https://0f524ae73b64.ngrok-free.app/rest/s1/hivemind/callback",
+  "token": "demo-webhook-token",
+  "timeoutSeconds": 10,
+  "enabled": true
+}

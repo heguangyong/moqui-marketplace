@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
+        default-menu-title="信息管理" require-authentication="false">
+
+    <parameter name="activeTab" default="supply"/>
+
+    <actions>
+        <script><![CDATA[
+            import java.math.BigDecimal
+
+            def listingFindBase = { String type ->
+                return ec.entity.find("marketplace.listing.Listing")
+                    .condition("listingType", type)
+                    .condition("status", "ACTIVE")
+                    .disableAuthz()
+            }
+
+            supplyCount = listingFindBase("SUPPLY").count() ?: 0
+            demandCount = listingFindBase("DEMAND").count() ?: 0
+
+            projectCount = ec.entity.find("mantle.work.effort.WorkEffort")
+                .condition("workEffortTypeId", "PROJECT")
+                .disableAuthz()
+                .count() ?: 0
+
+            listingList = []
+            projectList = []
+
+            if (activeTab != "project") {
+                String listingType = activeTab == "demand" ? "DEMAND" : "SUPPLY"
+                listingList = ec.entity.find("marketplace.listing.Listing")
+                    .condition("listingType", listingType)
+                    .orderBy("-createdDate")
+                    .limit(20)
+                    .disableAuthz()
+                    .list()
+            } else {
+                projectList = ec.entity.find("mantle.work.effort.WorkEffort")
+                    .condition("workEffortTypeId", "PROJECT")
+                    .orderBy("-lastUpdatedStamp")
+                    .limit(20)
+                    .disableAuthz()
+                    .list()
+            }
+        ]]></script>
+    </actions>
+
+    <widgets>
+        <container style="q-page q-pa-md column q-gutter-md">
+            <!-- 统计概览 -->
+            <container style="row q-col-gutter-md">
+                <container style="col">
+                    <container style="q-card q-pa-md text-center" class="bg-primary text-white">
+                        <label text="${supplyCount}" style="text-h4 text-weight-bold"/>
+                        <label text="活跃供应" style="text-subtitle1"/>
+                    </container>
+                </container>
+                <container style="col">
+                    <container style="q-card q-pa-md text-center" class="bg-green-6 text-white">
+                        <label text="${demandCount}" style="text-h4 text-weight-bold"/>
+                        <label text="活跃需求" style="text-subtitle1"/>
+                    </container>
+                </container>
+                <container style="col">
+                    <container style="q-card q-pa-md text-center" class="bg-orange-6 text-white">
+                        <label text="${projectCount}" style="text-h4 text-weight-bold"/>
+                        <label text="在管项目" style="text-subtitle1"/>
+                    </container>
+                </container>
+            </container>
+
+            <!-- Tab 导航 -->
+            <container style="display:flex; gap:8px; background:#f5f5f5; padding:6px 8px; border-radius:6px;">
+                <link url="InfoManagement" parameter-map="[activeTab:'supply']"
+                      style="padding:8px 16px; border-radius:4px; text-decoration:none; font-weight:500; background:#1976d2; color:#fff;"
+                      text="供应信息">
+                    <condition>${activeTab == 'supply'}</condition>
+                </link>
+                <link url="InfoManagement" parameter-map="[activeTab:'supply']"
+                      style="padding:8px 16px; border-radius:4px; text-decoration:none; font-weight:500; color:#1976d2;"
+                      text="供应信息">
+                    <condition>${activeTab != 'supply'}</condition>
+                </link>
+
+                <link url="InfoManagement" parameter-map="[activeTab:'demand']"
+                      style="padding:8px 16px; border-radius:4px; text-decoration:none; font-weight:500; background:#1976d2; color:#fff;"
+                      text="需求信息">
+                    <condition>${activeTab == 'demand'}</condition>
+                </link>
+                <link url="InfoManagement" parameter-map="[activeTab:'demand']"
+                      style="padding:8px 16px; border-radius:4px; text-decoration:none; font-weight:500; color:#1976d2;"
+                      text="需求信息">
+                    <condition>${activeTab != 'demand'}</condition>
+                </link>
+
+                <link url="InfoManagement" parameter-map="[activeTab:'project']"
+                      style="padding:8px 16px; border-radius:4px; text-decoration:none; font-weight:500; background:#1976d2; color:#fff;"
+                      text="项目信息">
+                    <condition>${activeTab == 'project'}</condition>
+                </link>
+                <link url="InfoManagement" parameter-map="[activeTab:'project']"
+                      style="padding:8px 16px; border-radius:4px; text-decoration:none; font-weight:500; color:#1976d2;"
+                      text="项目信息">
+                    <condition>${activeTab != 'project'}</condition>
+                </link>
+            </container>
+
+            <!-- 供应 / 需求列表 -->
+            <if condition="${activeTab != 'project'}">
+                <container style="q-card">
+                    <container style="q-card__section">
+                        <label text="${activeTab == 'demand' ? '需求信息列表' : '供应信息列表'}" style="text-h6"/>
+                    </container>
+                    <container style="q-list separator">
+                        <section-iterate name="ListingIterate" list="listingList" entry="listing">
+                            <widgets>
+                                <container style="q-item q-item--clickable q-py-sm">
+                                    <container style="q-item__section">
+                                        <label text="${listing.title ?: '未命名信息'}" style="text-subtitle1 text-weight-medium"/>
+                                        <label text="${listing.description ?: '暂无描述'}" style="text-caption text-grey-7 q-mt-xs"/>
+                                        <container style="row q-gutter-xs q-mt-xs">
+                                            <label text="状态: ${listing.status ?: 'UNKNOWN'}"
+                                                   style="text-caption q-chip q-chip--dense"/>
+                                            <if condition="${listing.priceMin}">
+                                                <label text="价格: ¥${listing.priceMin}${listing.priceMax ? ' - ¥' + listing.priceMax : ''}"
+                                                       style="text-caption q-chip q-chip--dense q-chip--outline"/>
+                                            </if>
+                                            <if condition="${listing.quantity}">
+                                                <label text="数量: ${listing.quantity}"
+                                                       style="text-caption q-chip q-chip--dense q-chip--outline"/>
+                                            </if>
+                                            <label text="${listing.category ?: '未分类'}"
+                                                   style="text-caption q-chip q-chip--dense q-chip--outline"/>
+                                        </container>
+                                    </container>
+                                    <container style="q-item__section side">
+                                        <label text="${listing.createdDate ? ec.l10n.format(listing.createdDate, 'yyyy-MM-dd HH:mm') : ''}"
+                                               style="text-caption text-grey-6"/>
+                                    </container>
+                                </container>
+                            </widgets>
+                        </section-iterate>
+                        <if condition="${!listingList || listingList.isEmpty()}">
+                            <container style="q-pa-md text-grey-6 text-center">
+                                <label text="暂无数据"/>
+                            </container>
+                        </if>
+                    </container>
+                </container>
+            </if>
+
+            <!-- 项目信息列表 -->
+            <if condition="${activeTab == 'project'}">
+                <container style="q-card">
+                    <container style="q-card__section">
+                        <label text="项目信息列表" style="text-h6"/>
+                    </container>
+                    <container style="q-list separator">
+                        <section-iterate name="ProjectIterate" list="projectList" entry="project">
+                            <widgets>
+                                <container style="q-item q-item--clickable q-py-sm">
+                                    <container style="q-item__section">
+                                        <label text="${project.workEffortName ?: project.workEffortId}" style="text-subtitle1 text-weight-medium"/>
+                                        <label text="${project.description ?: '暂无描述'}" style="text-caption text-grey-7 q-mt-xs"/>
+                                        <container style="row q-gutter-xs q-mt-xs">
+                                            <label text="状态: ${project.currentStatusId ?: project.statusId ?: 'UNKNOWN'}"
+                                                   style="text-caption q-chip q-chip--dense"/>
+                                            <if condition="${project.estimatedCompletionDate}">
+                                                <label text="计划完成: ${ec.l10n.format(project.estimatedCompletionDate, 'yyyy-MM-dd')}"
+                                                       style="text-caption q-chip q-chip--dense q-chip--outline"/>
+                                            </if>
+                                            <if condition="${project.actualCompletionDate}">
+                                                <label text="实际完成: ${ec.l10n.format(project.actualCompletionDate, 'yyyy-MM-dd')}"
+                                                       style="text-caption q-chip q-chip--dense q-chip--outline"/>
+                                            </if>
+                                        </container>
+                                    </container>
+                                    <container style="q-item__section side">
+                                        <label text="${project.lastUpdatedStamp ? ec.l10n.format(project.lastUpdatedStamp, 'yyyy-MM-dd HH:mm') : ''}"
+                                               style="text-caption text-grey-6"/>
+                                    </container>
+                                </container>
+                            </widgets>
+                        </section-iterate>
+                        <if condition="${!projectList || projectList.isEmpty()}">
+                            <container style="q-pa-md text-grey-6 text-center">
+                                <label text="暂无项目信息"/>
+                            </container>
+                        </if>
+                    </container>
+                </container>
+            </if>
+        </container>
+    </widgets>
+</screen>

@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
+        default-menu-title="系统配置" default-menu-index="2"
+        include-child-content="true" require-authentication="false">
+
+    <always-actions>
+        <set field="pageHeader" value="智能推荐 - 系统配置中心"/>
+        <set field="pageSubHeader" value="开发和管理工具集成"/>
+    </always-actions>
+
+    <widgets>
+        <container style="row">
+            <container style="col-md-12">
+                <label text="${pageHeader}" type="h2"/>
+                <label text="${pageSubHeader}" style="text-muted"/>
+            </container>
+        </container>
+
+        <container style="row margin-top">
+            <!-- Telegram Bot配置区域 -->
+            <container style="col-md-6">
+                <container style="panel panel-info">
+                    <container style="panel-heading">
+                        <label text="🤖 Telegram Bot 配置" type="h4"/>
+                    </container>
+                    <container style="panel-body">
+                        <label text="Telegram Bot Token配置和状态监控"/>
+
+                        <container style="margin-top">
+                            <link url="../TelegramAdmin" text="📱 Telegram 管理界面" link-type="anchor"/>
+                        </container>
+
+                        <container style="margin-top">
+                            <label text="📋 Bot 功能状态:" style="font-weight: bold;"/>
+                            <container style="margin-left">
+                                <label text="✅ 4分类主菜单系统已实现"/>
+                                <label text="✅ 智能识别模式已集成"/>
+                                <label text="✅ 多模态消息处理已完成"/>
+                                <label text="✅ 会话状态管理已建立"/>
+                            </container>
+                        </container>
+                    </container>
+                </container>
+            </container>
+
+            <!-- AI模型配置区域 -->
+            <container style="col-md-6">
+                <container style="panel panel-warning">
+                    <container style="panel-heading">
+                        <label text="🧠 AI 模型参数调整" type="h4"/>
+                    </container>
+                    <container style="panel-body">
+                        <label text="智谱AI GLM-4/GLM-4V配置和调优"/>
+
+                        <container style="margin-top">
+                            <label text="🎯 当前AI配置:" style="font-weight: bold;"/>
+                            <container style="margin-left">
+                                <label text="🤖 主AI: 智谱AI GLM-4 Plus"/>
+                                <label text="🎤 语音: 智谱清言语音识别"/>
+                                <label text="📷 图像: GLM-4V Plus 视觉模型"/>
+                                <label text="🧠 路由: MCP智能分类引擎"/>
+                            </container>
+                        </container>
+                    </container>
+                </container>
+            </container>
+        </container>
+
+        <container style="row margin-top">
+            <!-- 测试数据管理区域 -->
+            <container style="col-md-6">
+                <container style="panel panel-success">
+                    <container style="panel-heading">
+                        <label text="🛠️ 测试数据管理" type="h4"/>
+                    </container>
+                    <container style="panel-body">
+                        <label text="开发和测试环境数据初始化"/>
+
+                        <container style="margin-top">
+                            <link url="../TestDataInit" text="🔧 测试数据初始化" link-type="anchor"/>
+                        </container>
+
+                        <container style="margin-top">
+                            <label text="📊 数据状态:" style="font-weight: bold;"/>
+                            <container style="margin-left">
+                                <label text="✅ 智能匹配算法已优化"/>
+                                <label text="✅ 项目需求评分已实现"/>
+                                <label text="✅ 多模态内容处理已增强"/>
+                                <label text="✅ 供需匹配样本数据已建立"/>
+                            </container>
+                        </container>
+                    </container>
+                </container>
+            </container>
+
+            <!-- 服务状态管理区域 -->
+            <container style="col-md-6">
+                <container style="panel panel-primary">
+                    <container style="panel-heading">
+                        <label text="⚙️ 服务状态管理" type="h4"/>
+                    </container>
+                    <container style="panel-body">
+                        <label text="系统服务和集成状态监控"/>
+
+                        <container style="margin-top">
+                            <label text="🔗 快速访问:" style="font-weight: bold;"/>
+                            <container style="margin-left">
+                                <link url="../Chat" text="💬 聊天测试工具" link-type="anchor"/>
+                                <link url="../Matching" text="🎯 匹配算法监控" link-type="anchor"/>
+                            </container>
+                        </container>
+
+                        <container style="margin-top">
+                            <label text="🏗️ 外部模块状态:" style="font-weight: bold;"/>
+                            <container style="margin-left">
+                                <label text="🔄 HiveMind项目管理: 集成准备中"/>
+                                <label text="🛒 流行电商: 开发计划中"/>
+                                <label text="💼 大理石ERP: 架构设计中"/>
+                            </container>
+                        </container>
+                    </container>
+                </container>
+            </container>
+        </container>
+
+        <!-- 系统架构信息 -->
+        <container style="row margin-top">
+            <container style="col-md-12">
+                <container style="panel panel-default">
+                    <container style="panel-heading">
+                        <label text="📋 系统架构概览" type="h4"/>
+                    </container>
+                    <container style="panel-body">
+                        <container style="row">
+                            <container style="col-md-4">
+                                <label text="🎯 核心理念:" style="font-weight: bold;"/>
+                                <label text="Telegram驱动的智能沟通分类平台"/>
+                            </container>
+                            <container style="col-md-4">
+                                <label text="🛠️ 技术架构:" style="font-weight: bold;"/>
+                                <label text="moqui-marketplace + moqui-mcp 双组件协作"/>
+                            </container>
+                            <container style="col-md-4">
+                                <label text="🔐 认证系统:" style="font-weight: bold;"/>
+                                <label text="纯JWT认证模式"/>
+                            </container>
+                        </container>
+
+                        <container style="margin-top">
+                            <label text="📊 4大业务分类:" style="font-weight: bold;"/>
+                            <container style="margin-left">
+                                <label text="📊 智能供需匹配 - 商品供需撮合和智能推荐"/>
+                                <label text="🏗️ 蜂巢项目管理 - 项目协作和任务管理"/>
+                                <label text="🛒 流行电商 - 电商平台管理和营销"/>
+                                <label text="💼 大理石ERP - 企业资源规划和流程管理"/>
+                            </container>
+                        </container>
+                    </container>
+                </container>
+            </container>
+        </container>
+
+        <!-- 开发工具快速导航 -->
+        <container style="row margin-top">
+            <container style="col-md-12">
+                <container style="alert alert-info">
+                    <label text="💡 开发提示:" style="font-weight: bold;"/>
+                    <label text="此页面集中了所有开发和管理工具，通过上述链接可以快速访问各功能模块。"/>
+                    <label text="遗留的独立页面已隐藏但功能保留，可通过直接URL访问进行兼容性验证。"/>
+                </container>
+            </container>
+        </container>
+    </widgets>
+</screen>

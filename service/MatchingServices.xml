@@ -84,6 +84,7 @@
             <parameter name="priceMatch" type="BigDecimal"/>
             <parameter name="freshnessScore" type="BigDecimal"/>
             <parameter name="preferenceScore" type="BigDecimal"/>
+            <parameter name="projectAffinity" type="BigDecimal"/>
             <parameter name="matchReason" type="String"/>
         </out-parameters>
         <actions>
@@ -109,10 +110,9 @@
                 priceMatch = scoreMap.priceMatch
                 freshnessScore = scoreMap.freshnessScore
                 preferenceScore = scoreMap.preferenceScore
+                projectAffinity = scoreMap.projectAffinity
 
-                BigDecimal percent = (matchScore ?: BigDecimal.ZERO).multiply(new BigDecimal("100"))
-                        .setScale(0, RoundingMode.HALF_UP)
-                matchReason = "供应【${supply.title ?: supplyListingId}】与需求【${demand.title ?: demandListingId}】的匹配度约为${percent}%"
+                matchReason = engine.generateMatchReason(scoreMap, supply, demand)
             ]]></script>
         </actions>
     </service>

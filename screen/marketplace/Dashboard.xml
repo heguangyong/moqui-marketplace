@@ -276,7 +276,7 @@
         <!-- 页面头部 - 使用Quasar 2风格 -->
         <container style="margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
             <container style="font-size: 2rem; font-weight: bold; color: #1976d2; margin-bottom: 8px;">
-                <label text="智能供需平台控制台"/>
+                <label text="智能推荐控制台"/>
             </container>
             <container style="color: #616161; margin-top: 8px; display: flex; gap: 8px;">
                 <label style="background: #1976d2; color: white; padding: 4px 8px; border-radius: 4px; display: inline-block;"

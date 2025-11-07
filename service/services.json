@@ -1,0 +1,8 @@
+{
+  "marketplace": {
+    "location": "component://moqui-marketplace/service/marketplace.xml"
+  },
+  "hivemindWebhook": {
+    "location": "component://moqui-marketplace/service/HiveMindWebhookServices.xml"
+  }
+}

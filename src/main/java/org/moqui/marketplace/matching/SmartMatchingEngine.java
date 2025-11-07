@@ -8,7 +8,11 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import groovy.json.JsonSlurper;
+
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -21,11 +25,18 @@ public class SmartMatchingEngine {
     private final ExecutionContext ec;
 
     // 权重配置
-    private static final BigDecimal WEIGHT_TAG_SIMILARITY = new BigDecimal("0.35");
-    private static final BigDecimal WEIGHT_GEO_PROXIMITY = new BigDecimal("0.25");
+    private static final BigDecimal WEIGHT_TAG_SIMILARITY = new BigDecimal("0.30");
+    private static final BigDecimal WEIGHT_GEO_PROXIMITY = new BigDecimal("0.20");
     private static final BigDecimal WEIGHT_PRICE_MATCH = new BigDecimal("0.15");
     private static final BigDecimal WEIGHT_FRESHNESS = new BigDecimal("0.10");
-    private static final BigDecimal WEIGHT_PREFERENCE = new BigDecimal("0.15");
+    private static final BigDecimal WEIGHT_PREFERENCE = new BigDecimal("0.10");
+    private static final BigDecimal WEIGHT_PROJECT_AFFINITY = new BigDecimal("0.15");
+
+    private static final List<String> EXHIBITION_KEYWORDS = Arrays.asList("展台", "搭建", "会展", "展览", "布展", "展位", "展厅", "展馆", "巡展");
+    private static final List<String> RENOVATION_KEYWORDS = Arrays.asList("装修", "改造", "翻新", "设计", "施工", "家装", "工装", "装潢", "软装", "硬装");
+    private static final List<String> ENGINEERING_KEYWORDS = Arrays.asList("工程", "总包", "施工队", "钢结构", "机电", "土建", "建材", "脚手架", "设备租赁", "电气", "管道", "消防", "弱电", "暖通", "安装");
+    private static final List<String> STYLE_KEYWORDS = Arrays.asList("现代", "科技", "工业", "中式", "欧式", "简约", "奢华", "北欧", "复古", "工业风", "极简", "科技感");
+    private static final List<String> MATERIAL_KEYWORDS = Arrays.asList("钢结构", "桁架", "木材", "灯光", "音响", "LED", "玻璃", "铝合金", "地毯", "石材", "PVC", "喷绘", "舞台", "幕布", "地板", "龙骨", "设备");
 
     public SmartMatchingEngine(ExecutionContext ec) {
         this.ec = ec;
@@ -60,9 +71,12 @@ public class SmartMatchingEngine {
         logger.info("Found {} candidate listings", candidates.size());
 
         // 3. 计算每个候选的匹配分数
+        ProjectProfile sourceProfile = extractProjectProfile(sourceListing);
+
         List<Map<String, Object>> matches = new ArrayList<>();
         for (EntityValue candidate : candidates) {
-            Map<String, Object> matchResult = calculateMatchScore(sourceListing, candidate);
+            ProjectProfile candidateProfile = extractProjectProfile(candidate);
+            Map<String, Object> matchResult = calculateMatchScore(sourceListing, candidate, sourceProfile, candidateProfile);
             BigDecimal matchScore = (BigDecimal) matchResult.get("matchScore");
 
             if (matchScore.compareTo(minScore) >= 0) {
@@ -90,6 +104,11 @@ public class SmartMatchingEngine {
      * 计算两个Listing之间的详细匹配分数
      */
     public Map<String, Object> calculateMatchScore(EntityValue listing1, EntityValue listing2) {
+        return calculateMatchScore(listing1, listing2, null, null);
+    }
+
+    public Map<String, Object> calculateMatchScore(EntityValue listing1, EntityValue listing2,
+                                                   ProjectProfile profile1, ProjectProfile profile2) {
         Map<String, Object> result = new HashMap<>();
 
         try {
@@ -127,12 +146,17 @@ public class SmartMatchingEngine {
                     listing2.getString("category")
             );
 
+            ProjectProfile effectiveProfile1 = profile1 != null ? profile1 : extractProjectProfile(listing1);
+            ProjectProfile effectiveProfile2 = profile2 != null ? profile2 : extractProjectProfile(listing2);
+            BigDecimal projectAffinity = calculateProjectAffinity(effectiveProfile1, effectiveProfile2);
+
             // 6. 加权计算总分
             BigDecimal totalScore = tagSimilarity.multiply(WEIGHT_TAG_SIMILARITY)
                     .add(geoProximity.multiply(WEIGHT_GEO_PROXIMITY))
                     .add(priceMatch.multiply(WEIGHT_PRICE_MATCH))
                     .add(freshnessScore.multiply(WEIGHT_FRESHNESS))
-                    .add(preferenceScore.multiply(WEIGHT_PREFERENCE));
+                    .add(preferenceScore.multiply(WEIGHT_PREFERENCE))
+                    .add(projectAffinity.multiply(WEIGHT_PROJECT_AFFINITY));
 
             result.put("matchScore", totalScore.setScale(4, RoundingMode.HALF_UP));
             result.put("tagSimilarity", tagSimilarity);
@@ -140,9 +164,10 @@ public class SmartMatchingEngine {
             result.put("priceMatch", priceMatch);
             result.put("freshnessScore", freshnessScore);
             result.put("preferenceScore", preferenceScore);
+            result.put("projectAffinity", projectAffinity);
 
-            logger.debug("Match score calculated: {} (tag:{}, geo:{}, price:{}, fresh:{}, pref:{})",
-                    totalScore, tagSimilarity, geoProximity, priceMatch, freshnessScore, preferenceScore);
+            logger.debug("Match score calculated: {} (tag:{}, geo:{}, price:{}, fresh:{}, pref:{}, project:{})",
+                    totalScore, tagSimilarity, geoProximity, priceMatch, freshnessScore, preferenceScore, projectAffinity);
 
         } catch (Exception e) {
             logger.error("Error calculating match score", e);
@@ -357,6 +382,259 @@ public class SmartMatchingEngine {
         }
     }
 
+    private ProjectProfile extractProjectProfile(EntityValue listing) {
+        ProjectProfile profile = new ProjectProfile();
+        if (listing == null) {
+            return profile;
+        }
+
+        StringBuilder rawBuilder = new StringBuilder();
+        String title = listing.getString("title");
+        if (title != null) rawBuilder.append(title).append(" ");
+        String description = listing.getString("description");
+        if (description != null) rawBuilder.append(description).append(" ");
+        String category = listing.getString("category");
+        if (category != null) rawBuilder.append(category).append(" ");
+        String subCategory = listing.getString("subCategory");
+        if (subCategory != null) rawBuilder.append(subCategory).append(" ");
+
+        try {
+            EntityList insights = ec.getEntity().find("marketplace.listing.ListingInsight")
+                    .condition("listingId", listing.getString("listingId"))
+                    .list();
+            for (EntityValue insight : insights) {
+                String summary = insight.getString("summary");
+                if (summary != null) rawBuilder.append(summary).append(" ");
+                String metadataJson = insight.getString("metadataJson");
+                if (metadataJson != null && !metadataJson.isEmpty()) {
+                    try {
+                        Object metadataObj = new JsonSlurper().parseText(metadataJson);
+                        if (metadataObj instanceof Map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> metadataMap = (Map<String, Object>) metadataObj;
+                            profile.metadata.putAll(metadataMap);
+                            for (Object value : metadataMap.values()) {
+                                if (value != null) rawBuilder.append(value.toString()).append(" ");
+                            }
+                        }
+                    } catch (Exception parseEx) {
+                        logger.debug("Failed to parse metadataJson for listing {}: {}", listing.getString("listingId"), parseEx.getMessage());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to load listing insights for {}: {}", listing.getString("listingId"), e.getMessage());
+        }
+
+        String rawText = rawBuilder.toString();
+        if (rawText.isEmpty()) {
+            return profile;
+        }
+
+        profile.keywords.addAll(extractChineseTokens(rawText));
+
+        int exhibitionCount = countKeywordMatches(rawText, EXHIBITION_KEYWORDS);
+        int renovationCount = countKeywordMatches(rawText, RENOVATION_KEYWORDS);
+        int engineeringCount = countKeywordMatches(rawText, ENGINEERING_KEYWORDS);
+
+        if (exhibitionCount >= renovationCount && exhibitionCount >= engineeringCount && exhibitionCount > 0) {
+            profile.projectType = "EXHIBITION_SETUP";
+        } else if (renovationCount >= exhibitionCount && renovationCount >= engineeringCount && renovationCount > 0) {
+            profile.projectType = "RENOVATION";
+        } else if (engineeringCount > 0) {
+            profile.projectType = "ENGINEERING";
+        }
+
+        Object metadataProjectType = profile.metadata.get("projectType");
+        if (metadataProjectType instanceof String && !((String) metadataProjectType).isEmpty()) {
+            profile.projectType = (String) metadataProjectType;
+        }
+
+        Matcher areaMatcher = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(平米|平方米|㎡|m2|平方)").matcher(rawText);
+        if (areaMatcher.find()) {
+            profile.areaSquare = Double.valueOf(areaMatcher.group(1));
+        } else if (profile.metadata.get("estimatedArea") instanceof Number) {
+            profile.areaSquare = ((Number) profile.metadata.get("estimatedArea")).doubleValue();
+        }
+
+        Matcher budgetMatcher = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(万|万元|千|k|元|人民币|rmb)").matcher(rawText.toLowerCase());
+        if (budgetMatcher.find()) {
+            profile.budgetAmount = convertBudget(Double.valueOf(budgetMatcher.group(1)), budgetMatcher.group(2));
+        } else if (profile.metadata.get("budgetAmountCny") instanceof Number) {
+            profile.budgetAmount = ((Number) profile.metadata.get("budgetAmountCny")).doubleValue();
+        }
+
+        Matcher durationMatcher = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(天|日|周|月|年)").matcher(rawText);
+        if (durationMatcher.find()) {
+            profile.durationDays = convertDuration(Double.valueOf(durationMatcher.group(1)), durationMatcher.group(2));
+        } else if (profile.metadata.get("estimatedDurationDays") instanceof Number) {
+            profile.durationDays = ((Number) profile.metadata.get("estimatedDurationDays")).doubleValue();
+        }
+
+        Matcher locationMatcher = Pattern.compile("(?:在|位于|地址|地点|于)([\\p{IsHan}]{2,9})(?:省|市|区|县|镇|馆|中心|展馆|工地)").matcher(rawText);
+        if (locationMatcher.find()) {
+            profile.locationHint = locationMatcher.group(1);
+        } else if (profile.metadata.get("locationHints") instanceof Collection) {
+            Collection<?> hints = (Collection<?>) profile.metadata.get("locationHints");
+            if (!hints.isEmpty()) {
+                profile.locationHint = hints.iterator().next().toString();
+            }
+        }
+
+        for (String style : STYLE_KEYWORDS) {
+            if (rawText.contains(style)) {
+                profile.styleTags.add(style);
+            }
+        }
+        if (profile.metadata.get("stylePreferences") instanceof Collection) {
+            Collection<?> styles = (Collection<?>) profile.metadata.get("stylePreferences");
+            for (Object style : styles) {
+                if (style != null) profile.styleTags.add(style.toString());
+            }
+        }
+
+        for (String material : MATERIAL_KEYWORDS) {
+            if (rawText.contains(material)) {
+                profile.materialTags.add(material);
+            }
+        }
+        if (profile.metadata.get("materialKeywords") instanceof Collection) {
+            Collection<?> materials = (Collection<?>) profile.metadata.get("materialKeywords");
+            for (Object material : materials) {
+                if (material != null) profile.materialTags.add(material.toString());
+            }
+        }
+
+        return profile;
+    }
+
+    private BigDecimal calculateProjectAffinity(ProjectProfile profile1, ProjectProfile profile2) {
+        if (profile1 == null || profile2 == null) {
+            return new BigDecimal("0.5");
+        }
+        if (!profile1.isProject() && !profile2.isProject()) {
+            return new BigDecimal("0.5");
+        }
+
+        double score = 0.5;
+
+        if (profile1.projectType != null && profile2.projectType != null) {
+            if (profile1.projectType.equals(profile2.projectType)) {
+                score = 0.75;
+            } else if (profile1.isProject() && profile2.isProject()) {
+                score = 0.4;
+            }
+        } else if (profile1.isProject() || profile2.isProject()) {
+            score = 0.55;
+        }
+
+        if (profile1.areaSquare != null && profile2.areaSquare != null) {
+            double smaller = Math.min(profile1.areaSquare, profile2.areaSquare);
+            double larger = Math.max(profile1.areaSquare, profile2.areaSquare);
+            if (larger > 0) {
+                double ratio = smaller / larger;
+                if (ratio >= 0.9) score += 0.1;
+                else if (ratio >= 0.75) score += 0.07;
+                else if (ratio >= 0.6) score += 0.04;
+                else score -= 0.05;
+            }
+        }
+
+        if (profile1.budgetAmount != null && profile2.budgetAmount != null) {
+            double diff = Math.abs(profile1.budgetAmount - profile2.budgetAmount);
+            double avg = (profile1.budgetAmount + profile2.budgetAmount) / 2.0;
+            if (avg > 0) {
+                double diffRatio = diff / avg;
+                if (diffRatio <= 0.2) score += 0.08;
+                else if (diffRatio <= 0.35) score += 0.05;
+                else if (diffRatio <= 0.5) score += 0.02;
+                else score -= 0.05;
+            }
+        }
+
+        if (profile1.durationDays != null && profile2.durationDays != null) {
+            double diff = Math.abs(profile1.durationDays - profile2.durationDays);
+            if (diff <= 7) score += 0.04;
+            else if (diff <= 14) score += 0.02;
+            else score -= 0.03;
+        }
+
+        if (profile1.locationHint != null && profile2.locationHint != null) {
+            if (profile1.locationHint.equals(profile2.locationHint)) {
+                score += 0.08;
+            } else if (profile1.locationHint.startsWith(profile2.locationHint)
+                    || profile2.locationHint.startsWith(profile1.locationHint)) {
+                score += 0.04;
+            } else {
+                score -= 0.04;
+            }
+        }
+
+        Set<String> styleIntersection = new HashSet<>(profile1.styleTags);
+        styleIntersection.retainAll(profile2.styleTags);
+        if (!styleIntersection.isEmpty()) {
+            score += 0.03;
+        }
+
+        Set<String> materialIntersection = new HashSet<>(profile1.materialTags);
+        materialIntersection.retainAll(profile2.materialTags);
+        if (!materialIntersection.isEmpty()) {
+            score += 0.02;
+        }
+
+        score = Math.max(0.0, Math.min(1.0, score));
+        return BigDecimal.valueOf(score).setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private int countKeywordMatches(String text, List<String> keywords) {
+        if (text == null || text.isEmpty()) return 0;
+        String lower = text.toLowerCase();
+        int count = 0;
+        for (String keyword : keywords) {
+            if (text.contains(keyword) || lower.contains(keyword.toLowerCase())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private Set<String> extractChineseTokens(String text) {
+        Set<String> tokens = new HashSet<>();
+        Matcher matcher = Pattern.compile("\\p{IsHan}+").matcher(text);
+        while (matcher.find()) {
+            tokens.add(matcher.group());
+        }
+        return tokens;
+    }
+
+    private Double convertBudget(Double value, String unit) {
+        if (value == null || unit == null) return value;
+        String lower = unit.toLowerCase();
+        if (lower.contains("万")) {
+            return value * 10000d;
+        } else if (lower.contains("千") || lower.contains("k")) {
+            return value * 1000d;
+        }
+        return value;
+    }
+
+    private Double convertDuration(Double value, String unit) {
+        if (value == null || unit == null) return value;
+        switch (unit) {
+            case "天":
+            case "日":
+                return value;
+            case "周":
+                return value * 7d;
+            case "月":
+                return value * 30d;
+            case "年":
+                return value * 365d;
+            default:
+                return value;
+        }
+    }
+
     /**
      * 生成匹配推荐理由
      * 基于匹配分数的各个维度
@@ -367,6 +645,7 @@ public class SmartMatchingEngine {
         BigDecimal tagSim = (BigDecimal) matchScores.get("tagSimilarity");
         BigDecimal geoProx = (BigDecimal) matchScores.get("geoProximity");
         BigDecimal priceMatch = (BigDecimal) matchScores.get("priceMatch");
+        BigDecimal projectAffinity = (BigDecimal) matchScores.get("projectAffinity");
 
         // 主要推荐理由（最高分的维度）
         if (tagSim.compareTo(new BigDecimal("0.7")) >= 0) {
@@ -381,6 +660,10 @@ public class SmartMatchingEngine {
 
         if (priceMatch.compareTo(new BigDecimal("0.8")) >= 0) {
             reason.append("价格非常合适；");
+        }
+
+        if (projectAffinity != null && projectAffinity.compareTo(new BigDecimal("0.6")) >= 0) {
+            reason.append("项目需求与资源能力高度吻合；");
         }
 
         // 添加信用信息
@@ -401,5 +684,21 @@ public class SmartMatchingEngine {
         }
 
         return reason.length() > 0 ? reason.toString() : "综合评估推荐";
+    }
+
+    private static class ProjectProfile {
+        String projectType = "NONE";
+        Double areaSquare;
+        Double budgetAmount;
+        Double durationDays;
+        String locationHint;
+        Set<String> styleTags = new HashSet<>();
+        Set<String> materialTags = new HashSet<>();
+        Set<String> keywords = new HashSet<>();
+        Map<String, Object> metadata = new HashMap<>();
+
+        boolean isProject() {
+            return projectType != null && !"NONE".equals(projectType) && !"NOT_PROJECT".equals(projectType);
+        }
     }
 }

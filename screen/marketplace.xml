@@ -1,18 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
-        default-menu-title="智能供需平台" default-menu-index="1"
+        default-menu-title="智能推荐" default-menu-index="1"
         include-child-content="true" require-authentication="false"
-        menu-image="fa fa-shopping-cart" menu-image-type="icon">
+        menu-image="fa fa-chart-line" menu-image-type="icon">
 
     <subscreens default-item="Dashboard">
-        <subscreens-item name="Dashboard" menu-title="控制台" location="component://moqui-marketplace/screen/marketplace/Dashboard.xml"/>
-        <subscreens-item name="Supply" menu-title="供应管理" location="component://moqui-marketplace/screen/marketplace/Supply.xml"/>
-        <subscreens-item name="Demand" menu-title="需求管理" location="component://moqui-marketplace/screen/marketplace/Demand.xml"/>
-        <subscreens-item name="Matching" menu-title="智能匹配" location="component://moqui-marketplace/screen/marketplace/Matching.xml"/>
-        <subscreens-item name="Chat" menu-title="AI助手" location="component://moqui-marketplace/screen/marketplace/Chat.xml"/>
-        <subscreens-item name="TelegramAdmin" menu-title="Telegram管理" location="component://moqui-marketplace/screen/marketplace/TelegramAdmin.xml"/>
-        <subscreens-item name="TestDataInit" menu-title="数据管理" location="component://moqui-marketplace/screen/marketplace/TestDataInit.xml"/>
+        <!-- 核心功能：控制台 -->
+        <subscreens-item name="Dashboard" menu-title="控制台"
+                         location="component://moqui-marketplace/screen/marketplace/Dashboard.xml"/>
+
+        <!-- 管理功能：系统配置 (仅开发/管理员可见) -->
+        <subscreens-item name="SystemConfig" menu-title="系统配置" menu-include="false"
+                         location="component://moqui-marketplace/screen/marketplace/SystemConfig.xml"/>
+
+        <!-- 隐藏的遗留页面 (保留但不显示) -->
+        <subscreens-item name="InfoManagement" menu-include="false"
+                         location="component://moqui-marketplace/screen/marketplace/InfoManagement.xml"/>
+        <subscreens-item name="Supply" menu-include="false"
+                         location="component://moqui-marketplace/screen/marketplace/Supply.xml"/>
+        <subscreens-item name="Demand" menu-include="false"
+                         location="component://moqui-marketplace/screen/marketplace/Demand.xml"/>
+        <subscreens-item name="Matching" menu-include="false"
+                         location="component://moqui-marketplace/screen/marketplace/Matching.xml"/>
+        <subscreens-item name="Chat" menu-include="false"
+                         location="component://moqui-marketplace/screen/marketplace/Chat.xml"/>
+        <subscreens-item name="TelegramAdmin" menu-include="false"
+                         location="component://moqui-marketplace/screen/marketplace/TelegramAdmin.xml"/>
+        <subscreens-item name="TestDataInit" menu-include="false"
+                         location="component://moqui-marketplace/screen/marketplace/TestDataInit.xml"/>
     </subscreens>
 
     <widgets>

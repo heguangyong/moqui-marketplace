@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <service verb="handle" noun="HiveMindWebhook" authenticate="false">
+        <description>接收HiveMind推送的项目/任务更新并触发同步与提醒</description>
+        <in-parameters>
+            <parameter name="notificationType" required="true">
+                <description>PROJECT_STATUS、TASK_STATUS、TASK_CREATED等</description>
+            </parameter>
+            <parameter name="payload" type="Map" required="true"/>
+            <parameter name="signature">
+                <description>可选：HiveMind侧签名，用于验证来源</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="processed" type="Boolean"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            import groovy.json.JsonOutput
+            import java.security.MessageDigest
+
+            String sharedSecret = System.getProperty("hivemind.webhook.secret") ?:
+                    System.getenv("HIVEMIND_WEBHOOK_SECRET") ?:
+                    ec.ecfi.getConfValue("hivemind.webhook.secret")
+            if (sharedSecret) {
+                if (!signature) {
+                    ec.logger.warn("收到HiveMind Webhook但缺少signature")
+                } else {
+                    String computed = MessageDigest.getInstance("SHA-256")
+                            .digest((JsonOutput.toJson(payload) + sharedSecret).getBytes("UTF-8"))
+                            .encodeHex().toString()
+                    if (!computed.equalsIgnoreCase(signature)) {
+                        ec.message.addError("Webhook签名验证失败")
+                        processed = false
+                        return
+                    }
+                }
+            }
+
+            String projectId = payload.projectId ?: payload.workEffortId ?: payload.listingId
+            if (!projectId) {
+                ec.message.addError("Webhook缺少projectId")
+                processed = false
+                return
+            }
+
+            Map syncParams = [:]
+            if (payload.projectId) syncParams.hiveMindProjectId = payload.projectId
+            if (!syncParams && payload.workEffortId) syncParams.workEffortId = payload.workEffortId
+            if (!syncParams && payload.listingId) {
+                def projectValue = ec.entity.find("marketplace.project.HiveMindProject")
+                        .condition("listingId", payload.listingId)
+                        .orderBy("-lastSyncDate")
+                        .disableAuthz()
+                        .one()
+                if (projectValue) syncParams.hiveMindProjectId = projectValue.getString("hiveMindProjectId")
+            }
+
+            if (syncParams) {
+                try {
+                    ec.service.sync().name("marketplace.MarketplaceServices.sync#HiveMindProjectStatus")
+                            .parameters(syncParams)
+                            .call()
+                } catch (Exception e) {
+                    ec.logger.warn("Webhook触发状态同步失败: ${e.message}")
+                }
+                try {
+                    ec.service.sync().name("marketplace.MarketplaceServices.fetch#HiveMindProjectTasks")
+                            .parameters(syncParams + [refreshRemote: true])
+                            .call()
+                } catch (Exception e) {
+                    ec.logger.warn("Webhook触发任务同步失败: ${e.message}")
+                }
+            }
+
+            boolean shouldNotify = notificationType in ["PROJECT_STATUS", "TASK_STATUS", "TASK_CREATED"]
+            if (shouldNotify && syncParams?.hiveMindProjectId) {
+                def projectValue = ec.entity.find("marketplace.project.HiveMindProject")
+                        .condition("hiveMindProjectId", syncParams.hiveMindProjectId)
+                        .disableAuthz()
+                        .one()
+                if (projectValue) {
+                    String listingId = projectValue.getString("listingId")
+                    def listing = listingId ? ec.entity.find("marketplace.listing.Listing")
+                            .condition("listingId", listingId)
+                            .disableAuthz()
+                            .one() : null
+                    String chatId = listing?.publisherId
+                    if (chatId) {
+                        String message = "🔔 HiveMind通知\n" +
+                                "• 类型: ${notificationType}\n" +
+                                "• 项目: ${syncParams.hiveMindProjectId ?: syncParams.workEffortId}\n" +
+                                "• 描述: ${payload.message ?: payload.status ?: '请查看详情'}"
+                        ec.service.sync().name("marketplace.MarketplaceServices.notify#TelegramProjectUpdate")
+                                .parameters([chatId: chatId, messageText: message])
+                                .call()
+                    }
+                }
+            }
+
+            ec.logger.info("已处理HiveMind webhook: ${notificationType} -> ${projectId}")
+            processed = true
+        ]]></script></actions>
+    </service>
+
+</services>

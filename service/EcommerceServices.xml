@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd"
+          default-service-name="marketplace.EcommerceServices">
+
+    <service verb="create" noun="Product" authenticate="true">
+        <description>创建电商商品</description>
+        <in-parameters>
+            <parameter name="productName" required="true"/>
+            <parameter name="productCategoryId"/>
+            <parameter name="price" type="BigDecimal" default-value="0.00"/>
+            <parameter name="stockQuantity" type="Long" default-value="0"/>
+            <parameter name="status" default-value="ACTIVE"/>
+            <parameter name="description"/>
+            <parameter name="imageUrl"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="ecommerceProductId"/>
+        </out-parameters>
+        <actions>
+            <set field="ecommerceProductId" from="ec.entity.sequencedIdPrimary"/>
+            <set field="createdDate" from="ec.user.nowTimestamp"/>
+            <set field="createdByUserId" from="ec.user.userId"/>
+            <set field="lastUpdatedDate" from="createdDate"/>
+            <service-call name="create#marketplace.ecommerce.EcommerceProduct"
+                          in-map="context + [ecommerceProductId:ecommerceProductId]"/>
+        </actions>
+    </service>
+
+    <service verb="update" noun="Product" authenticate="true">
+        <in-parameters>
+            <parameter name="ecommerceProductId" required="true"/>
+            <parameter name="productName"/>
+            <parameter name="productCategoryId"/>
+            <parameter name="price" type="BigDecimal"/>
+            <parameter name="stockQuantity" type="Long"/>
+            <parameter name="status"/>
+            <parameter name="description"/>
+            <parameter name="imageUrl"/>
+        </in-parameters>
+        <actions>
+            <set field="lastUpdatedDate" from="ec.user.nowTimestamp"/>
+            <service-call name="update#marketplace.ecommerce.EcommerceProduct" in-map="context"/>
+        </actions>
+    </service>
+
+    <service verb="get" noun="ProductList" authenticate="true">
+        <in-parameters>
+            <parameter name="productCategoryId"/>
+            <parameter name="status"/>
+            <parameter name="pageIndex" type="Integer" default="0"/>
+            <parameter name="pageSize" type="Integer" default="20"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="products" type="List"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                def find = ec.entity.makeFind("marketplace.ecommerce.EcommerceProduct")
+                if (productCategoryId) find.condition("productCategoryId", productCategoryId)
+                if (status) find.condition("status", status)
+                int size = (pageSize ?: 20) as int
+                int index = (pageIndex ?: 0) as int
+                find.offset(index * size).limit(size)
+                find.orderBy("-lastUpdatedDate")
+                def entityList = find.list()
+                products = entityList ? entityList.collect { it.getMap(false) } : []
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="search" noun="Products" authenticate="true">
+        <description>按关键词和价格区间搜索商品</description>
+        <in-parameters>
+            <parameter name="keyword"/>
+            <parameter name="categoryId"/>
+            <parameter name="minPrice" type="BigDecimal"/>
+            <parameter name="maxPrice" type="BigDecimal"/>
+            <parameter name="limit" type="Integer" default="20"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="products" type="List"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            def find = ec.entity.makeFind("marketplace.ecommerce.EcommerceProduct")
+            find.limit((limit ?: 20) as int)
+            find.orderBy("-lastUpdatedDate")
+            if (categoryId) find.condition("productCategoryId", categoryId)
+            if (keyword) {
+                def keywordLike = "%${keyword.toString().toLowerCase()}%"
+                find.where((ec.entity.conditionFactory.makeCondition("productName", org.moqui.entity.EntityCondition.Like, keywordLike))
+                        .or(ec.entity.conditionFactory.makeCondition("description", org.moqui.entity.EntityCondition.Like, keywordLike)))
+            }
+            if (minPrice) find.condition("price", org.moqui.entity.EntityCondition.GreaterThanOrEqualTo, minPrice)
+            if (maxPrice) find.condition("price", org.moqui.entity.EntityCondition.LessThanOrEqualTo, maxPrice)
+            def entityList = find.list()
+            products = entityList ? entityList.collect { it.getMap(false) } : []
+        ]]></script></actions>
+    </service>
+
+    <service verb="create" noun="Order" authenticate="true">
+        <description>创建订单并写入明细</description>
+        <in-parameters>
+            <parameter name="ecommerceCustomerId" required="true"/>
+            <parameter name="cartId"/>
+            <parameter name="orderItems" type="List" required="true"/>
+            <parameter name="shippingAddress"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="ecommerceOrderId"/>
+            <parameter name="orderTotal" type="BigDecimal"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            import java.math.BigDecimal
+            if (!orderItems || orderItems.isEmpty()) {
+                ec.message.addError("订单需要至少一个商品")
+                return
+            }
+            ecommerceOrderId = ec.entity.sequencedIdPrimary
+            BigDecimal total = BigDecimal.ZERO
+            List<Map> seqItems = []
+            orderItems.eachWithIndex { Map item, int idx ->
+                BigDecimal qty = new BigDecimal(item.quantity ?: "1")
+                BigDecimal price = new BigDecimal(item.unitPrice ?: "0")
+                BigDecimal lineTotal = qty.multiply(price)
+                total = total.add(lineTotal)
+                seqItems << [
+                        orderItemSeqId    : String.format("%05d", idx + 1),
+                        ecommerceOrderId  : ecommerceOrderId,
+                        ecommerceProductId: item.ecommerceProductId,
+                        quantity          : qty.intValue(),
+                        unitPrice         : price,
+                        itemTotal         : lineTotal
+                ]
+            }
+            Timestamp nowTs = ec.user.nowTimestamp
+            ec.service.sync().name("create#marketplace.ecommerce.EcommerceOrder").parameters([
+                    ecommerceOrderId : ecommerceOrderId,
+                    ecommerceCustomerId: ecommerceCustomerId,
+                    cartId          : cartId,
+                    orderStatus     : "CREATED",
+                    orderTotal      : total,
+                    shippingAddress : shippingAddress,
+                    createdDate     : nowTs,
+                    createdByUserId : ec.user.userId,
+                    lastUpdatedDate : nowTs
+            ]).call()
+            seqItems.each { Map oi ->
+                ec.service.sync().name("create#marketplace.ecommerce.EcommerceOrderItem").parameters(
+                        oi + [createdDate: nowTs, createdByUserId: ec.user.userId, lastUpdatedDate: nowTs]).call()
+            }
+            orderTotal = total
+        ]]></script></actions>
+    </service>
+
+    <service verb="get" noun="OrderStatus" authenticate="true">
+        <in-parameters>
+            <parameter name="ecommerceOrderId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="orderStatus"/>
+            <parameter name="paymentStatus"/>
+            <parameter name="order"/>
+        </out-parameters>
+        <actions>
+            <set field="order" from="ec.entity.find(\"marketplace.ecommerce.EcommerceOrder\").condition(\"ecommerceOrderId\", ecommerceOrderId).one()"/>
+            <if condition="!order">
+                <set field="orderStatus" value="NOT_FOUND"/>
+                <return/>
+            </if>
+            <set field="orderStatus" from="order.orderStatus"/>
+            <set field="paymentStatus" from="order.paymentStatus"/>
+        </actions>
+    </service>
+
+    <service verb="update" noun="OrderStatus" authenticate="true">
+        <description>更新订单状态及支付状态</description>
+        <in-parameters>
+            <parameter name="ecommerceOrderId" required="true"/>
+            <parameter name="orderStatus"/>
+            <parameter name="paymentStatus"/>
+        </in-parameters>
+        <actions><script><![CDATA[
+            def orderValue = ec.entity.find("marketplace.ecommerce.EcommerceOrder")
+                    .condition("ecommerceOrderId", ecommerceOrderId)
+                    .forUpdate(true)
+                    .one()
+            if (!orderValue) {
+                ec.message.addError("订单不存在")
+                return
+            }
+            if (orderStatus) orderValue.set("orderStatus", orderStatus)
+            if (paymentStatus) orderValue.set("paymentStatus", paymentStatus)
+            orderValue.set("lastUpdatedDate", ec.user.nowTimestamp)
+            orderValue.store()
+        ]]></script></actions>
+    </service>
+
+    <service verb="update" noun="ProductInventory" authenticate="true">
+        <description>更新商品库存数量</description>
+        <in-parameters>
+            <parameter name="ecommerceProductId" required="true"/>
+            <parameter name="stockQuantity" type="Long"/>
+            <parameter name="quantityAdjustment" type="Long"/>
+        </in-parameters>
+        <actions><script><![CDATA[
+            def value = ec.entity.find("marketplace.ecommerce.EcommerceProduct")
+                    .condition("ecommerceProductId", ecommerceProductId)
+                    .forUpdate(true)
+                    .one()
+            if (!value) {
+                ec.message.addError("商品不存在")
+                return
+            }
+            if (stockQuantity != null) {
+                value.set("stockQuantity", stockQuantity)
+            } else if (quantityAdjustment != null) {
+                Long current = value.getLong("stockQuantity") ?: 0L
+                value.set("stockQuantity", current + quantityAdjustment)
+            }
+            value.set("lastUpdatedDate", ec.user.nowTimestamp)
+            value.store()
+        ]]></script></actions>
+    </service>
+
+    <service verb="get" noun="InventoryStatus" authenticate="true">
+        <description>获取单个商品库存信息</description>
+        <in-parameters>
+            <parameter name="ecommerceProductId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="inventoryInfo" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="inventoryInfo" from="ec.entity.find(\"marketplace.ecommerce.EcommerceProduct\").condition(\"ecommerceProductId\", ecommerceProductId).one()?.getMap()"/>
+            <if condition="!inventoryInfo">
+                <set field="inventoryInfo" value="[:]"/>
+                <set field="inventoryInfo.message" value="商品不存在"/>
+            </if>
+        </actions>
+    </service>
+
+    <service verb="get" noun="ProductRecommendations" authenticate="true">
+        <description>获取推荐商品列表（占位实现）</description>
+        <in-parameters>
+            <parameter name="ecommerceCustomerId"/>
+            <parameter name="limit" type="Integer" default="5"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="recommendations" type="List"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            def find = ec.entity.makeFind("marketplace.ecommerce.EcommerceProduct")
+                    .condition("status", "ACTIVE")
+                    .orderBy("-lastUpdatedDate")
+                    .limit((limit ?: 5) as int)
+            recommendations = find.list().collect {
+                [
+                        ecommerceProductId: it.ecommerceProductId,
+                        productName       : it.productName,
+                        price             : it.price,
+                        stockQuantity     : it.stockQuantity
+                ]
+            }
+        ]]></script></actions>
+    </service>
+
+</services>

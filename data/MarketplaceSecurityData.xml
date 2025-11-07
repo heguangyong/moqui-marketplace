@@ -20,6 +20,10 @@
     <moqui.security.ArtifactGroupMember artifactGroupId="MARKETPLACE_APP" artifactTypeEnumId="AT_SERVICE"
             inheritAuthz="Y" artifactName="marketplace.*"/>
 
+    <!-- Ensure base groups exist -->
+    <moqui.security.UserGroup userGroupId="_NA_" description="Anonymous Users"/>
+    <moqui.security.UserGroup userGroupId="ALL_USERS" description="All Authenticated Users"/>
+
     <!-- Marketplace Services Group Authorization -->
     <moqui.security.ArtifactAuthz artifactAuthzId="MARKETPLACE_SVC_AUTHZ_ADMIN" userGroupId="ADMIN" artifactGroupId="MARKETPLACE_SERVICES"
             authzTypeEnumId="AUTHZT_ALWAYS" authzActionEnumId="AUTHZA_ALL"/>
@@ -28,18 +32,10 @@
     <moqui.security.ArtifactAuthz artifactAuthzId="MARKETPLACE_SVC_AUTHZ_ALL_USERS" userGroupId="ALL_USERS" artifactGroupId="MARKETPLACE_SERVICES"
             authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
 
-    <!-- Additional explicit permissions for these services -->
-    <moqui.security.ArtifactAuthz artifactAuthzId="MARKETPLACE_SERVICES_ALL" userGroupId="ALL_USERS"
-            artifactTypeEnumId="AT_SERVICE" artifactName="marketplace.process#AllMatching"
+    <!-- Services are covered by MARKETPLACE_SERVICES group -->
+    <moqui.security.ArtifactAuthz artifactAuthzId="MARKETPLACE_SERVICES_ALL" userGroupId="ALL_USERS" artifactGroupId="MARKETPLACE_SERVICES"
             authzTypeEnumId="AUTHZT_ALWAYS" authzActionEnumId="AUTHZA_ALL"/>
-    <moqui.security.ArtifactAuthz artifactAuthzId="MARKETPLACE_SERVICES_ANONYMOUS" userGroupId="_NA_"
-            artifactTypeEnumId="AT_SERVICE" artifactName="marketplace.process#AllMatching"
-            authzTypeEnumId="AUTHZT_ALWAYS" authzActionEnumId="AUTHZA_ALL"/>
-    <moqui.security.ArtifactAuthz artifactAuthzId="MARKETPLACE_INIT_ALL" userGroupId="ALL_USERS"
-            artifactTypeEnumId="AT_SERVICE" artifactName="marketplace.initialize#DemoData"
-            authzTypeEnumId="AUTHZT_ALWAYS" authzActionEnumId="AUTHZA_ALL"/>
-    <moqui.security.ArtifactAuthz artifactAuthzId="MARKETPLACE_INIT_ANONYMOUS" userGroupId="_NA_"
-            artifactTypeEnumId="AT_SERVICE" artifactName="marketplace.initialize#DemoData"
+    <moqui.security.ArtifactAuthz artifactAuthzId="MARKETPLACE_SERVICES_ANONYMOUS" userGroupId="_NA_" artifactGroupId="MARKETPLACE_SERVICES"
             authzTypeEnumId="AUTHZT_ALWAYS" authzActionEnumId="AUTHZA_ALL"/>
 
     <!-- Add mcp services to the group -->
@@ -56,21 +52,7 @@
     <moqui.security.ArtifactGroupMember artifactGroupId="MARKETPLACE_APP" artifactTypeEnumId="AT_ENTITY"
             inheritAuthz="Y" artifactName="mcp.*"/>
 
-    <!-- Explicit MCP entity permissions for anonymous users -->
-    <moqui.security.ArtifactAuthz artifactAuthzId="MCP_DIALOG_SESSION_AUTHZ_ANONYMOUS" userGroupId="_NA_"
-            artifactTypeEnumId="AT_ENTITY" artifactName="mcp.dialog.McpDialogSession"
-            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
-    <moqui.security.ArtifactAuthz artifactAuthzId="MCP_DIALOG_MESSAGE_AUTHZ_ANONYMOUS" userGroupId="_NA_"
-            artifactTypeEnumId="AT_ENTITY" artifactName="mcp.dialog.McpDialogMessage"
-            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
-
-    <!-- Explicit MCP entity permissions for all users -->
-    <moqui.security.ArtifactAuthz artifactAuthzId="MCP_DIALOG_SESSION_AUTHZ_ALL" userGroupId="ALL_USERS"
-            artifactTypeEnumId="AT_ENTITY" artifactName="mcp.dialog.McpDialogSession"
-            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
-    <moqui.security.ArtifactAuthz artifactAuthzId="MCP_DIALOG_MESSAGE_AUTHZ_ALL" userGroupId="ALL_USERS"
-            artifactTypeEnumId="AT_ENTITY" artifactName="mcp.dialog.McpDialogMessage"
-            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
+    <!-- MCP entities are covered by the MCP_APP group through wildcard patterns -->
 
     <!-- Marketplace Entities Group -->
     <moqui.security.ArtifactGroup artifactGroupId="MARKETPLACE_ENTITIES" description="Marketplace Entities"/>
@@ -85,33 +67,7 @@
     <moqui.security.ArtifactAuthz artifactAuthzId="MARKETPLACE_ENT_AUTHZ_ALL_USERS" userGroupId="ALL_USERS" artifactGroupId="MARKETPLACE_ENTITIES"
             authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
 
-    <!-- Specific entity authorizations for anonymous users -->
-    <moqui.security.ArtifactAuthz artifactAuthzId="SUPPLY_LISTING_AUTHZ_ANONYMOUS" userGroupId="_NA_"
-            artifactTypeEnumId="AT_ENTITY" artifactName="marketplace.SupplyListing"
-            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
-    <moqui.security.ArtifactAuthz artifactAuthzId="DEMAND_LISTING_AUTHZ_ANONYMOUS" userGroupId="_NA_"
-            artifactTypeEnumId="AT_ENTITY" artifactName="marketplace.DemandListing"
-            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
-    <moqui.security.ArtifactAuthz artifactAuthzId="LISTING_AUTHZ_ANONYMOUS" userGroupId="_NA_"
-            artifactTypeEnumId="AT_ENTITY" artifactName="marketplace.listing.Listing"
-            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
-    <moqui.security.ArtifactAuthz artifactAuthzId="MATCH_AUTHZ_ANONYMOUS" userGroupId="_NA_"
-            artifactTypeEnumId="AT_ENTITY" artifactName="marketplace.match.Match"
-            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
-
-    <!-- Specific entity authorizations for all users -->
-    <moqui.security.ArtifactAuthz artifactAuthzId="SUPPLY_LISTING_AUTHZ_ALL" userGroupId="ALL_USERS"
-            artifactTypeEnumId="AT_ENTITY" artifactName="marketplace.SupplyListing"
-            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
-    <moqui.security.ArtifactAuthz artifactAuthzId="DEMAND_LISTING_AUTHZ_ALL" userGroupId="ALL_USERS"
-            artifactTypeEnumId="AT_ENTITY" artifactName="marketplace.DemandListing"
-            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
-    <moqui.security.ArtifactAuthz artifactAuthzId="LISTING_AUTHZ_ALL" userGroupId="ALL_USERS"
-            artifactTypeEnumId="AT_ENTITY" artifactName="marketplace.listing.Listing"
-            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
-    <moqui.security.ArtifactAuthz artifactAuthzId="MATCH_AUTHZ_ALL" userGroupId="ALL_USERS"
-            artifactTypeEnumId="AT_ENTITY" artifactName="marketplace.match.Match"
-            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_ALL"/>
+    <!-- Specific marketplace entities are covered by the MARKETPLACE_ENTITIES group -->
 
     <!-- Add marketplace entities to the group -->
     <moqui.security.ArtifactGroupMember artifactGroupId="MARKETPLACE_APP" artifactTypeEnumId="AT_ENTITY"
@@ -154,12 +110,6 @@
     <moqui.security.ArtifactAuthz artifactAuthzId="MARKETPLACE_ENTITY_AUTHZ_PUBLIC" userGroupId="ALL_USERS" artifactGroupId="MARKETPLACE_APP"
             authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_VIEW"/>
 
-    <!-- Specific anonymous user permissions for FormConfigUser -->
-    <moqui.security.ArtifactAuthz artifactAuthzId="FORMCONFIG_AUTHZ_ANONYMOUS" userGroupId="_NA_"
-            artifactTypeEnumId="AT_ENTITY" artifactName="moqui.screen.form.FormConfigUser"
-            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_VIEW"/>
-    <moqui.security.ArtifactAuthz artifactAuthzId="FORMCONFIG_AUTHZ_PUBLIC" userGroupId="ALL_USERS"
-            artifactTypeEnumId="AT_ENTITY" artifactName="moqui.screen.form.FormConfigUser"
-            authzTypeEnumId="AUTHZT_ALLOW" authzActionEnumId="AUTHZA_VIEW"/>
+    <!-- FormConfigUser is a system entity, no need for specific authz -->
 
 </entity-facade-xml>
