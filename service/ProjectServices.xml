@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <service verb="create" noun="Project" authenticate="true">
+        <description>创建独立项目（可选自动生成WorkEffort）</description>
+        <in-parameters>
+            <parameter name="projectName" required="true"/>
+            <parameter name="description"/>
+            <parameter name="projectType" default-value="GENERAL"/>
+            <parameter name="status" default-value="PLANNING"/>
+            <parameter name="startDate" type="date-time"/>
+            <parameter name="endDate" type="date-time"/>
+            <parameter name="budget" type="BigDecimal"/>
+            <parameter name="clientName"/>
+            <parameter name="createWorkEffort" type="Boolean" default-value="true"/>
+            <parameter name="workEffortStatus" default-value="WIP_PROJECT_ACTIVE"/>
+            <parameter name="projectId"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="projectId"/>
+            <parameter name="workEffortId"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            Timestamp nowTs = ec.user.nowTimestamp
+            String newProjectId = projectId ?: ec.entity.sequencedIdPrimary
+            String resolvedType = (projectType ?: "GENERAL").toUpperCase()
+            boolean createWE = (createWorkEffort == null) ? true : ("true".equalsIgnoreCase(createWorkEffort.toString()))
+
+            if (createWE) {
+                def weResult = ec.service.sync().name("create#mantle.work.effort.WorkEffort").parameters([
+                        workEffortTypeId: "PROJECT",
+                        workEffortName  : projectName,
+                        description     : description,
+                        statusId        : workEffortStatus ?: "WIP_PROJECT_ACTIVE",
+                        actualStartDate : startDate ?: nowTs,
+                        actualCompletionDate: endDate,
+                        estimatedWorkCost: budget
+                ]).call()
+                workEffortId = weResult.workEffortId
+            }
+
+            ec.service.sync().name("create#marketplace.project.ProjectInfo").parameters([
+                    projectId      : newProjectId,
+                    projectName    : projectName,
+                    description    : description,
+                    projectType    : resolvedType,
+                    status         : status ?: "PLANNING",
+                    startDate      : startDate,
+                    endDate        : endDate,
+                    budget         : budget,
+                    clientName     : clientName,
+                    workEffortId   : workEffortId,
+                    createdDate    : nowTs,
+                    lastUpdatedDate: nowTs
+            ]).call()
+
+            projectId = newProjectId
+        ]]></script></actions>
+    </service>
+
+    <service verb="get" noun="ProjectList" authenticate="true">
+        <description>获取项目列表</description>
+        <in-parameters>
+            <parameter name="projectType"/>
+            <parameter name="status"/>
+            <parameter name="clientName"/>
+            <parameter name="searchText"/>
+            <parameter name="limit" type="Integer" default="20"/>
+            <parameter name="offset" type="Integer" default="0"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="projects" type="List"/>
+            <parameter name="totalCount" type="Long"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            def find = ec.entity.find("marketplace.project.ProjectInfo")
+            if (projectType) find.condition("projectType", projectType.toUpperCase())
+            if (status) find.condition("status", status)
+            if (clientName) find.condition("clientName", clientName)
+            if (searchText) {
+                def like = "%${searchText.toString().toLowerCase()}%"
+                def cf = ec.entity.conditionFactory
+                find.where(
+                        cf.makeCondition(
+                                cf.makeCondition("projectName", org.moqui.entity.EntityCondition.LIKE, like)
+                        ).or(cf.makeCondition("description", org.moqui.entity.EntityCondition.LIKE, like))
+                )
+            }
+            int pageSize = (limit ?: 20) as int
+            int pageOffset = (offset ?: 0) as int
+            totalCount = find.count()
+            projects = find.orderBy("-lastUpdatedDate").offset(pageOffset).limit(pageSize).list().collect { it.getMap(false) }
+        ]]></script></actions>
+    </service>
+
+    <service verb="get" noun="ProjectSummary" authenticate="true">
+        <description>查看单个项目摘要</description>
+        <in-parameters>
+            <parameter name="projectId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="project" type="Map"/>
+        </out-parameters>
+        <actions>
+            <set field="project" from="ec.entity.find('marketplace.project.ProjectInfo').condition('projectId', projectId).one()?.getMap(false)"/>
+            <if condition="!project">
+                <ec-message message="项目不存在" type="error"/>
+            </if>
+        </actions>
+    </service>
+
+</services>

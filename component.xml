@@ -15,6 +15,7 @@
     <!-- 服务文件包含 -->
     <service-include location="component://moqui-marketplace/service/marketplace.xml"/>
     <service-include location="component://moqui-marketplace/service/MarketplaceServices.xml"/>
+    <service-include location="component://moqui-marketplace/service/ProjectServices.xml"/>
     <service-include location="component://moqui-marketplace/service/EcommerceServices.xml"/>
     <service-include location="component://moqui-marketplace/service/HiveMindWebhookServices.xml"/>
 
