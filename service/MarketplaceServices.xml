@@ -27,6 +27,18 @@
             <parameter name="expiryHours" type="Integer" default="48"/>
             <parameter name="imageUrls"/>
             <parameter name="autoTags" type="List"><description>自动提取的标签ID列表</description></parameter>
+            <parameter name="projectMetadata" type="Map">
+                <description>AI识别出的结构化项目需求信息</description>
+            </parameter>
+            <parameter name="mediaInsights" type="List">
+                <description>多模态识别产生的摘要或标签列表</description>
+            </parameter>
+            <parameter name="speechTranscript">
+                <description>语音识别的原始文本</description>
+            </parameter>
+            <parameter name="imageInsights" type="List">
+                <description>图像识别结果或标签集合</description>
+            </parameter>
         </in-parameters>
         <out-parameters>
             <parameter name="listingId"/>
@@ -37,6 +49,7 @@
                 import org.moqui.marketplace.matching.SmartMatchingEngine
                 import java.sql.Timestamp
                 import java.math.BigDecimal
+                import groovy.json.JsonOutput
 
                 def logger = org.slf4j.LoggerFactory.getLogger("marketplace.createListing")
 
@@ -79,6 +92,124 @@
                 listingValue.create()
                 listingId = listingValue.listingId
 
+                Closure storeInsight = { String insightType, String sourceType, Object confidenceValue, String summaryText, Object metadataValue ->
+                    if (!insightType) return
+                    BigDecimal confidenceBd
+                    if (confidenceValue instanceof BigDecimal) {
+                        confidenceBd = (BigDecimal) confidenceValue
+                    } else if (confidenceValue != null) {
+                        confidenceBd = new BigDecimal(confidenceValue.toString())
+                    } else {
+                        confidenceBd = new BigDecimal("0.7")
+                    }
+                    String summaryClean = summaryText ? summaryText.toString() : ""
+                    if (summaryClean.length() > 240) {
+                        summaryClean = summaryClean.substring(0, 240)
+                    }
+                    Map metadataMap = [:]
+                    if (metadataValue instanceof Map) {
+                        metadataMap.putAll((Map) metadataValue)
+                    } else if (metadataValue) {
+                        metadataMap.put("value", metadataValue)
+                    }
+                    try {
+                        ec.service.sync().name("marketplace.MarketplaceServices.store#ListingInsight").parameters([
+                                listingId  : listingId,
+                                insightType: insightType,
+                                sourceType : sourceType ?: "SYSTEM",
+                                confidence : confidenceBd,
+                                summary    : summaryClean,
+                                metadata   : metadataMap
+                        ]).call()
+                    } catch (Exception e) {
+                        logger.warn("Failed to store listing insight for ${listingId}: ${e.message}")
+                    }
+                }
+
+                List<String> aggregatedImageLabels = []
+                Map combinedProjectMetadata = context.projectMetadata instanceof Map ?
+                        new LinkedHashMap(context.projectMetadata) : [:]
+
+                if (context.speechTranscript) {
+                    storeInsight("VOICE", "TELEGRAM_VOICE", context.speechTranscriptConfidence ?: "0.7",
+                            context.speechTranscript, [transcript: context.speechTranscript])
+                    if (!combinedProjectMetadata.containsKey("speechTranscript")) {
+                        combinedProjectMetadata.speechTranscript = context.speechTranscript
+                    }
+                }
+
+                if (context.imageInsights instanceof Collection) {
+                    Integer imageIndex = 0
+                    context.imageInsights.each { Object rawInsight ->
+                        imageIndex++
+                        Map meta = [:]
+                        String summaryText = null
+                        BigDecimal insightConfidence = null
+                        if (rawInsight instanceof Map) {
+                            meta.putAll(rawInsight as Map)
+                            summaryText = rawInsight.summary ?: rawInsight.caption ?: rawInsight.description
+                            insightConfidence = rawInsight.confidence instanceof BigDecimal ?
+                                    rawInsight.confidence : (rawInsight.confidence ? new BigDecimal(rawInsight.confidence.toString()) : null)
+                            if (rawInsight.labels instanceof Collection) {
+                                rawInsight.labels.each { lbl ->
+                                    if (lbl) aggregatedImageLabels.add(lbl.toString())
+                                }
+                            }
+                        } else if (rawInsight) {
+                            summaryText = rawInsight.toString()
+                        }
+                        storeInsight("IMAGE", "TELEGRAM_IMAGE", insightConfidence ?: "0.75",
+                                summaryText ?: "图片识别结果${imageIndex}", meta)
+                    }
+                }
+
+                if (context.mediaInsights instanceof Collection) {
+                    context.mediaInsights.each { Object raw ->
+                        if (!(raw instanceof Map)) return
+                        Map insightMap = raw as Map
+                        String type = insightMap.type ? insightMap.type.toString().toUpperCase() : "TEXT"
+                        String sourceType = insightMap.source ?: "MULTIMODAL"
+                        Object confidenceVal = insightMap.confidence ?: "0.75"
+                        String summaryVal = insightMap.summary ?: insightMap.title ?: insightMap.description ?: insightMap.message
+                        if (insightMap.labels instanceof Collection) {
+                            insightMap.labels.each { lbl ->
+                                if (lbl) aggregatedImageLabels.add(lbl.toString())
+                            }
+                        }
+                        Map insightMetadata = insightMap.metadata instanceof Map ? (Map) insightMap.metadata : new LinkedHashMap(insightMap)
+                        storeInsight(type, sourceType, confidenceVal, summaryVal, insightMetadata)
+                    }
+                }
+
+                if (!combinedProjectMetadata && (description || (context.speechTranscript ?: null) || !aggregatedImageLabels.isEmpty())) {
+                    try {
+                        Map extraction = ec.service.sync().name("marketplace.MarketplaceServices.extract#ProjectRequirements").parameters([
+                                description     : description ?: "",
+                                projectType     : null,
+                                speechTranscript: context.speechTranscript,
+                                imageLabels     : aggregatedImageLabels,
+                                metadataHints   : context.mediaInsights instanceof Map ? context.mediaInsights : null
+                        ]).call()
+                        if (extraction?.extractedRequirements instanceof Map) {
+                            combinedProjectMetadata.putAll(extraction.extractedRequirements as Map)
+                        }
+                    } catch (Exception e) {
+                        logger.debug("项目需求识别失败: ${e.message}")
+                    }
+                }
+
+                if (!aggregatedImageLabels.isEmpty() && !combinedProjectMetadata.containsKey("multimodalLabels")) {
+                    combinedProjectMetadata.multimodalLabels = aggregatedImageLabels
+                }
+
+                if (combinedProjectMetadata) {
+                    storeInsight("TEXT", "PROJECT_EXTRACTOR",
+                            combinedProjectMetadata.confidence ?: "0.82",
+                            "项目需求识别",
+                            combinedProjectMetadata)
+                    context.projectMetadata = combinedProjectMetadata
+                }
+
                 def engine = new SmartMatchingEngine(ec)
                 BigDecimal scoreThreshold = new BigDecimal("0.6")
                 List<Map<String, Object>> matches = []
@@ -90,6 +221,59 @@
 
                 matchedCount = matches.size()
                 context.matches = matches
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="store" noun="ListingInsight">
+        <description>保存多模态识别得到的结构化信息，辅助匹配算法</description>
+        <in-parameters>
+            <parameter name="listingId" required="true"/>
+            <parameter name="insightType" required="true"/>
+            <parameter name="sourceType"/>
+            <parameter name="summary"/>
+            <parameter name="confidence" type="BigDecimal"/>
+            <parameter name="metadata" type="Map"/>
+        </in-parameters>
+        <actions>
+            <script><![CDATA[
+                import java.math.BigDecimal
+                if (!insightType) {
+                    ec.message.addError("缺少insightType，无法保存识别信息")
+                    return
+                }
+
+                BigDecimal confidenceBd
+                if (confidence instanceof BigDecimal) {
+                    confidenceBd = (BigDecimal) confidence
+                } else if (confidence != null) {
+                    confidenceBd = new BigDecimal(confidence.toString())
+                } else {
+                    confidenceBd = new BigDecimal("0.7")
+                }
+
+                String summaryText = summary ? summary.toString() : ""
+                if (summaryText.length() > 240) {
+                    summaryText = summaryText.substring(0, 240)
+                }
+
+                Map metadataMap = [:]
+                if (metadata instanceof Map) {
+                    metadataMap.putAll((Map) metadata)
+                }
+
+                String metadataJson = metadataMap ? JsonOutput.toJson(metadataMap) : null
+
+                ec.entity.makeValue("marketplace.listing.ListingInsight").setAll([
+                        listingId    : listingId,
+                        insightSeqId : ec.entity.sequencedIdPrimary,
+                        insightType  : insightType,
+                        sourceType   : sourceType ?: "SYSTEM",
+                        confidence   : confidenceBd,
+                        summary      : summaryText,
+                        metadataJson : metadataJson,
+                        createdDate  : ec.user.nowTimestamp
+                ]).create()
             ]]></script>
         </actions>
     </service>
@@ -760,6 +944,9 @@
         <in-parameters>
             <parameter name="userDescription" required="true"/>
             <parameter name="inputType" default-value="TEXT"/>
+            <parameter name="speechTranscript"/>
+            <parameter name="imageLabels" type="List"/>
+            <parameter name="metadataHints" type="Map"/>
         </in-parameters>
         <out-parameters>
             <parameter name="isProject" type="Boolean"/>
@@ -770,32 +957,89 @@
         <actions><script><![CDATA[
             import java.math.BigDecimal
 
-            String description = (userDescription ?: "").toLowerCase()
-            List<String> exhibitionKeywords = ["展台","搭建","会展","展览","布展","展位","展会"]
-            List<String> renovationKeywords = ["装修","改造","翻新","设计","施工","家装","工装"]
+            String descriptionBase = userDescription ?: ""
+            String transcriptText = speechTranscript ?: ""
+            List labelList = (imageLabels instanceof Collection) ? new ArrayList(imageLabels) : []
+            Map hintsMap = metadataHints instanceof Map ? metadataHints : [:]
 
-            int exhibitionCount = exhibitionKeywords.count { description.contains(it) }
-            int renovationCount = renovationKeywords.count { description.contains(it) }
-
-            BigDecimal keywordScore = BigDecimal.ZERO
-            String detectedType = null
-
-            if (exhibitionCount > 0 || renovationCount > 0) {
-                if (exhibitionCount >= renovationCount) {
-                    detectedType = "EXHIBITION_SETUP"
-                    keywordScore = new BigDecimal(Math.min(exhibitionCount * 0.2, 0.9))
-                } else {
-                    detectedType = "RENOVATION"
-                    keywordScore = new BigDecimal(Math.min(renovationCount * 0.2, 0.9))
+            StringBuilder mergedText = new StringBuilder()
+            mergedText.append(descriptionBase).append(" ")
+            if (transcriptText) mergedText.append(transcriptText).append(" ")
+            if (hintsMap) {
+                hintsMap.each { key, value ->
+                    if (value instanceof Collection) {
+                        value.each { item ->
+                            if (item) mergedText.append(item.toString()).append(" ")
+                        }
+                    } else if (value) {
+                        mergedText.append(value.toString()).append(" ")
+                    }
                 }
             }
+            labelList.each { lbl ->
+                if (lbl) mergedText.append(lbl.toString()).append(" ")
+            }
 
-            isProject = detectedType != null
-            projectType = detectedType ?: "NOT_PROJECT"
-            confidence = isProject ? keywordScore.max(new BigDecimal("0.6")) : BigDecimal.ZERO
+            String normalized = mergedText.toString()
+            String normalizedLower = normalized.toLowerCase()
 
-            extractedRequirements = ec.service.sync().name("marketplace.MarketplaceServices.extract#ProjectRequirements")
-                .parameters([description: userDescription, projectType: projectType]).call().extractedRequirements
+            List<String> exhibitionKeywords = ["展台","搭建","会展","展览","布展","展位","展厅","巡展","展馆"]
+            List<String> renovationKeywords = ["装修","改造","翻新","设计","施工","家装","工装","装潢","软装","硬装","办公室","店面"]
+            List<String> engineeringKeywords = ["工程","总包","施工队","钢结构","机电","土建","建材","脚手架","设备租赁","电气","管道","消防","弱电","暖通","工程师","项目经理","进场"]
+
+            Closure<Integer> countMatches = { List<String> keywords ->
+                keywords.count { kw -> normalized.contains(kw) || normalizedLower.contains(kw.toLowerCase()) }
+            }
+
+            int exhibitionCount = countMatches(exhibitionKeywords)
+            int renovationCount = countMatches(renovationKeywords)
+            int engineeringCount = countMatches(engineeringKeywords)
+
+            Map<String, Integer> categoryScore = [
+                    EXHIBITION_SETUP: exhibitionCount,
+                    RENOVATION      : renovationCount,
+                    ENGINEERING     : engineeringCount
+            ]
+
+            String detectedType = categoryScore.max { it.value }?.key
+            int maxCount = detectedType ? (categoryScore[detectedType] ?: 0) : 0
+
+            if (!detectedType || maxCount == 0) {
+                detectedType = "NOT_PROJECT"
+            }
+
+            BigDecimal keywordConfidence = maxCount > 0 ?
+                    new BigDecimal(Math.min(0.5d + maxCount * 0.1d, 0.95d)) :
+                    BigDecimal.ZERO
+
+            if (hintsMap.projectTypeHint instanceof String) {
+                detectedType = hintsMap.projectTypeHint.toString()
+                keywordConfidence = keywordConfidence.max(new BigDecimal("0.75"))
+            }
+
+            Map extractionResult = ec.service.sync()
+                    .name("marketplace.MarketplaceServices.extract#ProjectRequirements")
+                    .parameters([
+                            description     : descriptionBase,
+                            projectType     : detectedType,
+                            speechTranscript: transcriptText,
+                            imageLabels     : labelList,
+                            metadataHints   : hintsMap
+                    ]).call()
+
+            isProject = detectedType != "NOT_PROJECT"
+            projectType = detectedType
+            confidence = isProject ? keywordConfidence.max(new BigDecimal("0.6")) : keywordConfidence
+
+            if (extractionResult?.extractedRequirements instanceof Map) {
+                extractedRequirements = extractionResult.extractedRequirements
+                def indicator = extractedRequirements.confidenceIndicators?.keywordScore
+                if (indicator instanceof BigDecimal && indicator.compareTo(confidence) > 0) {
+                    confidence = indicator
+                }
+            } else {
+                extractedRequirements = [:]
+            }
         ]]></script></actions>
     </service>
 
@@ -804,60 +1048,293 @@
         <in-parameters>
             <parameter name="description" required="true"/>
             <parameter name="projectType"/>
+            <parameter name="speechTranscript"/>
+            <parameter name="imageLabels" type="List"/>
+            <parameter name="metadataHints" type="Map"/>
         </in-parameters>
         <out-parameters>
             <parameter name="extractedRequirements" type="Map"/>
         </out-parameters>
         <actions><script><![CDATA[
+            import java.util.regex.Pattern
+
+            String baseText = description ?: ""
+            String transcript = speechTranscript ?: ""
+            List<String> labelList = []
+            if (imageLabels instanceof Collection) {
+                imageLabels.each { lbl -> if (lbl) labelList.add(lbl.toString()) }
+            }
+            Map hintsMap = metadataHints instanceof Map ? metadataHints : [:]
+
+            StringBuilder combined = new StringBuilder()
+            combined.append(baseText).append(" ")
+            if (transcript) combined.append(transcript).append(" ")
+            labelList.each { combined.append(it).append(" ") }
+            if (hintsMap) {
+                hintsMap.each { key, value ->
+                    if (value instanceof Collection) {
+                        value.each { item -> if (item) combined.append(item.toString()).append(" ") }
+                    } else if (value) {
+                        combined.append(value.toString()).append(" ")
+                    }
+                }
+            }
+
+            String totalText = combined.toString()
+
+            Closure extractNumber = { Pattern pattern, Closure<Double> transformer ->
+                def matcher = pattern.matcher(totalText)
+                if (!matcher.find()) return null
+                Double number = matcher.group(1)?.toDouble()
+                if (number == null) return null
+                return transformer ? transformer(number, matcher.group(2)) : number
+            }
+
+            Double areaSquare = extractNumber(Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(平米|平方米|㎡|m2|平方)")) { Double value, String unit ->
+                return value
+            }
+
+            Double budgetAmount = extractNumber(Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(万|万元|千|k|元|人民币|rmb)")) { Double value, String unit ->
+                String lowerUnit = unit?.toLowerCase()
+                if (!lowerUnit) return value
+                if (lowerUnit.contains("万")) {
+                    return value * 10000d
+                } else if (lowerUnit.contains("千") || lowerUnit.contains("k")) {
+                    return value * 1000d
+                }
+                return value
+            }
+
+            Double durationDays = extractNumber(Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(天|日|周|月|年)")) { Double value, String unit ->
+                switch (unit) {
+                    case ["天","日"]: return value
+                    case "周": return value * 7d
+                    case "月": return value * 30d
+                    case "年": return value * 365d
+                    default: return value
+                }
+            }
+
+            List<String> locationHints = []
+            def locationMatcher = Pattern.compile("(?:在|位于|地址|地点|于)([\\p{IsHan}]{2,9})(?:省|市|区|县|镇|馆|中心|展馆|工地)").matcher(totalText)
+            while (locationMatcher.find()) {
+                locationHints.add(locationMatcher.group(1))
+            }
+            if (hintsMap.locationHints instanceof Collection) {
+                hintsMap.locationHints.each { loc ->
+                    if (loc) locationHints.add(loc.toString())
+                }
+            }
+
+            List<String> stylePreferences = []
+            List<String> styleKeywords = ["现代","科技","工业","中式","欧式","简约","奢华","北欧","复古","工业风","极简","科技感","艺术","主题"]
+            styleKeywords.each { keyword ->
+                if (totalText.contains(keyword)) stylePreferences.add(keyword)
+            }
+
+            List<String> materialKeywords = ["钢结构","桁架","木材","灯光","音响","LED","玻璃","铝合金","地毯","石材","PVC","喷绘","舞台","幕布","地板","龙骨","冷气","空调","电缆","管道"]
+            List<String> materialHints = []
+            materialKeywords.each { keyword ->
+                if (totalText.contains(keyword)) materialHints.add(keyword)
+            }
+
             Map<String, Object> requirements = [
-                originalDescription: description,
-                projectType        : projectType ?: "UNKNOWN",
-                keywords           : description.findAll(/\p{IsHan}+/)
+                originalDescription : baseText,
+                projectType         : projectType ?: "UNKNOWN",
+                keywords            : totalText.findAll(/\p{IsHan}+/),
+                estimatedArea       : areaSquare,
+                budgetAmountCny     : budgetAmount,
+                estimatedDurationDays: durationDays,
+                locationHints       : locationHints.unique(),
+                stylePreferences    : stylePreferences.unique(),
+                materialKeywords    : materialHints.unique(),
+                multimodalLabels    : labelList.unique()
             ]
+
+            Map<String, Object> confidenceIndicators = [:]
+            if ((requirements.stylePreferences ?: []).size() > 0 || (requirements.materialKeywords ?: []).size() > 0) {
+                confidenceIndicators.keywordScore = new BigDecimal("0.7")
+            }
+            if (areaSquare || budgetAmount || durationDays) {
+                confidenceIndicators.detailCompleteness = new BigDecimal("0.75")
+            }
+            requirements.confidenceIndicators = confidenceIndicators
+            requirements.speechTranscript = transcript
+
             extractedRequirements = requirements
         ]]></script></actions>
     </service>
 
     <service verb="call" noun="HiveMindApi" authenticate="true">
-        <description>通用的HiveMind API调用封装（Java HttpClient）</description>
+        <description>通用的HiveMind API调用封装（支持配置化、鉴权、重试）</description>
         <in-parameters>
-            <parameter name="endpoint" required="true"/>
-            <parameter name="requestData" type="Map" required="true"/>
+            <parameter name="endpoint">
+                <description>完整URL；若未提供则根据path与baseUrl拼接</description>
+            </parameter>
+            <parameter name="path">
+                <description>相对路径，如 /projects</description>
+            </parameter>
+            <parameter name="httpMethod" default-value="POST"/>
+            <parameter name="requestData" type="Map"/>
+            <parameter name="queryParameters" type="Map"/>
+            <parameter name="headers" type="Map"/>
+            <parameter name="retryOnFailure" type="Boolean" default="true"/>
+            <parameter name="timeoutSeconds" type="Integer"/>
         </in-parameters>
         <out-parameters>
             <parameter name="statusCode" type="Integer"/>
             <parameter name="response" type="Map"/>
             <parameter name="success" type="Boolean"/>
+            <parameter name="rawResponse" type="String"/>
+            <parameter name="requestBody" type="String"/>
+            <parameter name="finalUrl"/>
         </out-parameters>
         <actions><script><![CDATA[
         import java.net.URI
+        import java.net.URLEncoder
         import java.net.http.HttpClient
         import java.net.http.HttpRequest
         import java.net.http.HttpResponse
+        import java.time.Duration
         import groovy.json.JsonOutput
         import groovy.json.JsonSlurper
 
+        Closure<String> buildUrl = { String base, String rel, Map params ->
+            String normalizedBase = base ?: ""
+            String normalizedRel = rel ?: ""
+            if (normalizedRel && normalizedBase) {
+                boolean baseEndsWithSlash = normalizedBase.endsWith("/")
+                boolean relStartsWithSlash = normalizedRel.startsWith("/")
+                if (baseEndsWithSlash && relStartsWithSlash) {
+                    normalizedRel = normalizedRel.substring(1)
+                } else if (!baseEndsWithSlash && !relStartsWithSlash) {
+                    normalizedBase = normalizedBase + "/"
+                }
+            }
+            String urlValue = normalizedBase + normalizedRel
+            if (params) {
+                String query = params.collect { key, val ->
+                    if (val == null) return null
+                    String encodedKey = URLEncoder.encode(key.toString(), "UTF-8")
+                    String encodedVal = URLEncoder.encode(val.toString(), "UTF-8")
+                    return encodedKey + "=" + encodedVal
+                }.findAll { it != null }.join("&")
+                if (query) {
+                    urlValue += (urlValue.contains("?") ? "&" : "?") + query
+                }
+            }
+            return urlValue
+        }
+
+        String configuredBase = System.getProperty("hivemind.api.baseUrl") ?:
+                System.getenv("HIVEMIND_API_URL") ?:
+                ec.ecfi.getConfValue("hivemind.api.baseUrl") ?:
+                "https://hivemind.example.com/api"
+        String effectivePath = path ?: ""
+        String resolvedUrl = endpoint ?: buildUrl(configuredBase, effectivePath, queryParameters ?: [:])
+
+        String token = System.getProperty("hivemind.api.token") ?:
+                System.getenv("HIVEMIND_API_TOKEN") ?:
+                ec.ecfi.getConfValue("hivemind.api.token")
+
+        int timeoutSec = (timeoutSeconds ?: (System.getProperty("hivemind.api.timeout.seconds") ?:
+                ec.ecfi.getConfValue("hivemind.api.timeout") ?: "15")) as Integer
+
+        String method = (httpMethod ?: "POST").toUpperCase()
+        boolean hasBody = ["POST","PUT","PATCH"].contains(method)
+
+        String requestJson = (requestData && hasBody) ? JsonOutput.toJson(requestData) : null
+        requestBody = requestJson
+
+        Map headerMap = [:]
+        if (headers instanceof Map) headerMap.putAll(headers)
+        if (!headerMap.containsKey("Accept")) headerMap.Accept = "application/json"
+        if (!headerMap.containsKey("User-Agent")) headerMap."User-Agent" = "Moqui-Marketplace/1.0"
+        if (hasBody && !headerMap.containsKey("Content-Type")) headerMap."Content-Type" = "application/json"
+        if (token && !headerMap.containsKey("Authorization")) headerMap.Authorization = "Bearer ${token}"
+
         HttpClient client = HttpClient.newBuilder()
-            .connectTimeout(java.time.Duration.ofSeconds(15))
+            .connectTimeout(Duration.ofSeconds(timeoutSec))
             .build()
 
-        String requestBodyJson = JsonOutput.toJson(requestData)
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(endpoint))
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(requestBodyJson))
-            .build()
+        Closure<HttpRequest> buildRequest = {
+            HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(resolvedUrl))
+            headerMap.each { k, v -> builder.header(k.toString(), v?.toString()) }
+            if (hasBody && requestJson) {
+                switch (method) {
+                    case "PUT":
+                        builder.PUT(HttpRequest.BodyPublishers.ofString(requestJson))
+                        break
+                    case "PATCH":
+                        builder.method("PATCH", HttpRequest.BodyPublishers.ofString(requestJson))
+                        break
+                    default:
+                        builder.POST(HttpRequest.BodyPublishers.ofString(requestJson))
+                        break
+                }
+            } else if (method == "DELETE") {
+                builder.DELETE()
+            } else if (method == "GET") {
+                builder.GET()
+            } else {
+                builder.method(method, HttpRequest.BodyPublishers.noBody())
+            }
+            builder.timeout(Duration.ofSeconds(timeoutSec)).build()
+        }
 
-        HttpResponse<String> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString())
-        statusCode = httpResponse.statusCode()
-        if (statusCode == 200) {
-            String body = httpResponse.body() ?: ""
-            response = body ? (Map) new JsonSlurper().parseText(body) : [:]
-            success = true
-        } else {
-            success = false
-            ec.logger.error("HiveMind API 调用失败: ${statusCode} -> ${httpResponse.body()}")
+        int maxAttempts = (retryOnFailure == false) ? 1 : ((System.getProperty("hivemind.api.retry.maxAttempts") ?:
+                ec.ecfi.getConfValue("hivemind.api.retry.maxAttempts") ?: "3") as Integer)
+        long baseDelayMs = (System.getProperty("hivemind.api.retry.backoff.millis") ?:
+                ec.ecfi.getConfValue("hivemind.api.retry.backoff.millis") ?: "2000") as long
+
+        Exception lastException = null
+        boolean callSuccess = false
+        Map responseMap = [:]
+        String rawBody = null
+        int httpStatus = 0
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                HttpResponse<String> httpResponse = client.send(buildRequest(), HttpResponse.BodyHandlers.ofString())
+                httpStatus = httpResponse.statusCode()
+                rawBody = httpResponse.body()
+                rawResponse = rawBody
+                if (httpStatus >= 200 && httpStatus < 300) {
+                    if (rawBody) {
+                        try {
+                            responseMap = (Map) new JsonSlurper().parseText(rawBody)
+                        } catch (Exception parseEx) {
+                            ec.logger.warn("HiveMind响应解析失败: ${parseEx.message}")
+                            responseMap = [raw: rawBody]
+                        }
+                    }
+                    callSuccess = true
+                    break
+                } else {
+                    ec.logger.warn("HiveMind API 调用失败 (attempt ${attempt}/${maxAttempts}): ${httpStatus} -> ${rawBody}")
+                }
+            } catch (Exception e) {
+                lastException = e
+                ec.logger.warn("HiveMind API 调用异常 (attempt ${attempt}/${maxAttempts}): ${e.message}")
+            }
+
+            if (attempt < maxAttempts) {
+                long delay = baseDelayMs * attempt
+                try { Thread.sleep(delay) } catch (InterruptedException ignored) {}
+            }
+        }
+
+        statusCode = httpStatus
+        response = responseMap
+        success = callSuccess
+        finalUrl = resolvedUrl
+
+        if (!callSuccess) {
+            if (lastException) {
+                ec.message.addError("HiveMind API 调用异常: ${lastException.message}")
+            } else {
+                ec.message.addError("HiveMind API 调用失败，HTTP ${httpStatus}")
+            }
         }
         ]]></script></actions>
     </service>
@@ -865,12 +1342,18 @@
     <service verb="create" noun="HiveMindProject" authenticate="true">
         <description>创建Moqui WorkEffort项目并同步至HiveMind</description>
         <in-parameters>
-            <parameter name="listingId" required="true"/>
+            <parameter name="listingId"/>
             <parameter name="clientName" required="true"/>
             <parameter name="projectType" default-value="EXHIBITION_SETUP"/>
             <parameter name="estimatedBudget" type="BigDecimal"/>
             <parameter name="venueSize"/>
             <parameter name="displayType"/>
+            <parameter name="siteLocation"/>
+            <parameter name="stylePreference"/>
+            <parameter name="expectedTimeline"/>
+            <parameter name="projectMetadata" type="Map"/>
+            <parameter name="projectName"/>
+            <parameter name="projectId"/>
         </in-parameters>
         <out-parameters>
             <parameter name="workEffortId"/>
@@ -878,24 +1361,103 @@
             <parameter name="success" type="Boolean"/>
         </out-parameters>
         <actions><script><![CDATA[
+            import groovy.json.JsonOutput
+
+            String resolvedType = (projectType ?: "EXHIBITION_SETUP").toUpperCase()
+            Map<String, Object> typeProfiles = [
+                    EXHIBITION_SETUP: [
+                            namePrefix: "会展搭建项目",
+                            descriptionTemplate: { "展台面积:${venueSize ?: '未提供'}; 展示类型:${displayType ?: '未提供'}" },
+                            payloadExtras: { Map meta ->
+                                meta.focusArea = "EXHIBITION"
+                                meta.venueSize = venueSize
+                                meta.displayType = displayType
+                            }
+                    ],
+                    RENOVATION: [
+                            namePrefix: "装修工程",
+                            descriptionTemplate: { "装修类型:${displayType ?: '整体装修改造'}; 面积:${venueSize ?: '未提供'}" },
+                            payloadExtras: { Map meta ->
+                                meta.focusArea = "RENOVATION"
+                                meta.stylePreference = stylePreference ?: "现代"
+                                meta.siteLocation = siteLocation
+                                meta.estimatedArea = venueSize
+                            }
+                    ],
+                    ENGINEERING: [
+                            namePrefix: "工程项目",
+                            descriptionTemplate: { "工程范围:${displayType ?: '综合工程'}; 地点:${siteLocation ?: '待确认'}" },
+                            payloadExtras: { Map meta ->
+                                meta.focusArea = "ENGINEERING"
+                                meta.siteLocation = siteLocation
+                                meta.timeline = expectedTimeline
+                            }
+                    ]
+            ]
+            Map selectedProfile = typeProfiles[resolvedType] ?: typeProfiles.EXHIBITION_SETUP
+
+            String workEffortName = "${selectedProfile.namePrefix}-${clientName}"
+            String workEffortDescription = selectedProfile.descriptionTemplate instanceof Closure ?
+                    selectedProfile.descriptionTemplate.call() : selectedProfile.descriptionTemplate
+
+            Timestamp nowTs = ec.user.nowTimestamp
+
             def workEffortResult = ec.service.sync().name("create#mantle.work.effort.WorkEffort").parameters([
-                workEffortTypeId  : "PROJECT",
-                workEffortName    : "会展搭建项目-${clientName}",
-                description       : "展台面积:${venueSize ?: '未提供'}; 展示类型:${displayType ?: '未提供'}",
-                estimatedWorkCost : estimatedBudget,
-                statusId          : "WIP_PROJECT_ACTIVE"
+                    workEffortTypeId  : "PROJECT",
+                    workEffortName    : workEffortName,
+                    description       : workEffortDescription,
+                    estimatedWorkCost : estimatedBudget,
+                    statusId          : "WIP_PROJECT_ACTIVE",
+                    facilityId        : null
             ]).call()
             workEffortId = workEffortResult.workEffortId
 
-            def apiResult = ec.service.sync().name("marketplace.MarketplaceServices.call#HiveMindApi").parameters([
-                endpoint   : "https://hivemind.example.com/api/projects",
-                requestData: [
-                    name        : "会展搭建项目-${clientName}",
+            String resolvedProjectName = projectName ?: workEffortName
+            String generatedProjectId = context.projectId ?: ec.entity.sequencedIdPrimary
+            ec.service.sync().name("create#marketplace.project.ProjectInfo").parameters([
+                    projectId      : generatedProjectId,
+                    projectName    : resolvedProjectName,
+                    description    : workEffortDescription,
+                    projectType    : resolvedType,
+                    status         : "PLANNING",
+                    startDate      : nowTs,
+                    budget         : estimatedBudget,
+                    clientName     : clientName,
+                    workEffortId   : workEffortId,
+                    createdDate    : nowTs,
+                    lastUpdatedDate: nowTs
+            ]).call()
+
+            Map<String, Object> metadataMap = [:]
+            if (projectMetadata instanceof Map) metadataMap.putAll((Map) projectMetadata)
+            metadataMap.listingId = listingId
+            metadataMap.projectType = resolvedType
+            metadataMap.venueSize = venueSize
+            metadataMap.displayType = displayType
+            metadataMap.siteLocation = siteLocation
+            metadataMap.stylePreference = stylePreference
+            metadataMap.expectedTimeline = expectedTimeline
+            if (selectedProfile.payloadExtras instanceof Closure) {
+                selectedProfile.payloadExtras.call(metadataMap)
+            }
+
+            Map<String, Object> payload = [
+                    name        : workEffortName,
                     description : "Moqui WorkEffort: ${workEffortId}",
                     clientInfo  : clientName,
-                    venueDetails: [size: venueSize, type: displayType],
-                    budget      : estimatedBudget
-                ]
+                    budget      : estimatedBudget,
+                    metadata    : metadataMap,
+                    projectType : resolvedType,
+                    source      : "MOQUI_MARKETPLACE"
+            ]
+            if (venueSize || displayType) {
+                payload.venueDetails = [size: venueSize, type: displayType]
+            }
+
+            def apiResult = ec.service.sync().name("marketplace.MarketplaceServices.call#HiveMindApi").parameters([
+                    path       : "/projects",
+                    httpMethod : "POST",
+                    requestData: payload
             ]).call()
 
             if (!(apiResult.success ?: false)) {
@@ -906,25 +1468,34 @@
 
             hiveMindProjectId = apiResult.response?.projectId
 
+            String requestJson = JsonOutput.toJson(payload)
+            String responseJson = apiResult.response ? JsonOutput.toJson(apiResult.response) : apiResult.rawResponse
+
             ec.entity.makeValue("marketplace.project.HiveMindProject").setAll([
-                workEffortId      : workEffortId,
-                hiveMindProjectId : hiveMindProjectId,
-                listingId         : listingId,
-                syncStatus        : "SYNCED",
-                lastSyncDate      : ec.user.nowTimestamp
+                    workEffortId       : workEffortId,
+                    projectId          : generatedProjectId,
+                    hiveMindProjectId  : hiveMindProjectId,
+                    listingId          : listingId,
+                    projectType        : resolvedType,
+                    syncStatus         : "SYNCED",
+                    lastSyncDate       : nowTs,
+                    lastStatusCode     : apiResult.statusCode?.toString(),
+                    lastRequestPayload : requestJson,
+                    lastResponsePayload: responseJson
             ]).create()
 
-            if (projectType == "EXHIBITION_SETUP") {
+            if (resolvedType == "EXHIBITION_SETUP") {
                 ec.entity.makeValue("marketplace.project.ExhibitionProject").setAll([
-                    workEffortId          : workEffortId,
-                    venueSize             : venueSize,
-                    displayType           : displayType
+                        workEffortId : workEffortId,
+                        venueSize    : venueSize,
+                        displayType  : displayType
                 ]).create()
             }
 
-            ec.service.sync().name("marketplace.project.generate#ExhibitionTasks").parameters([
-                workEffortId      : workEffortId,
-                hiveMindProjectId : hiveMindProjectId
+            ec.service.sync().name("marketplace.project.generate#ProjectTasks").parameters([
+                    projectType       : resolvedType,
+                    workEffortId      : workEffortId,
+                    hiveMindProjectId : hiveMindProjectId
             ]).call()
 
             success = true
@@ -937,38 +1508,526 @@
             <parameter name="workEffortId" required="true"/>
             <parameter name="hiveMindProjectId"/>
         </in-parameters>
+        <actions>
+            <service-call name="marketplace.project.generate#ProjectTasks"
+                          in-map="[projectType:'EXHIBITION_SETUP', workEffortId:workEffortId, hiveMindProjectId:hiveMindProjectId]"/>
+        </actions>
+    </service>
+
+    <service verb="generate" noun="ProjectTasks" authenticate="true">
+        <description>根据项目类型生成标准化任务并可选同步到HiveMind</description>
+        <in-parameters>
+            <parameter name="projectType" default-value="EXHIBITION_SETUP"/>
+            <parameter name="workEffortId" required="true"/>
+            <parameter name="hiveMindProjectId"/>
+        </in-parameters>
         <actions><script><![CDATA[
-            List<Map> taskTemplates = [
-                [name: "需求确认", description: "确认展台尺寸、风格、预算", sequenceNum: 1],
-                [name: "设计方案", description: "提供3D设计图和材料清单", sequenceNum: 2],
-                [name: "材料采购", description: "订购展台结构和装饰材料", sequenceNum: 3],
-                [name: "现场搭建", description: "按照设计图进行现场组装", sequenceNum: 4],
-                [name: "验收交付", description: "客户验收确认，项目交付", sequenceNum: 5]
+            import groovy.json.JsonSlurper
+
+            String resolvedType = (projectType ?: "EXHIBITION_SETUP").toUpperCase()
+
+            Map<String, List<Map<String, Object>>> defaultTemplates = [
+                    EXHIBITION_SETUP: [
+                            [name: "需求确认", description: "确认展台尺寸、风格、预算", sequenceNum: 1],
+                            [name: "设计方案", description: "提供3D设计图和材料清单", sequenceNum: 2],
+                            [name: "材料采购", description: "订购展台结构和装饰材料", sequenceNum: 3],
+                            [name: "现场搭建", description: "按照设计图进行现场组装", sequenceNum: 4],
+                            [name: "验收交付", description: "客户验收确认，项目交付", sequenceNum: 5]
+                    ],
+                    RENOVATION: [
+                            [name: "现场勘测", description: "测量面积并记录现状", sequenceNum: 1],
+                            [name: "设计方案", description: "输出平面+效果方案", sequenceNum: 2],
+                            [name: "拆除准备", description: "协调原结构拆除及垃圾清运", sequenceNum: 3],
+                            [name: "施工执行", description: "水电/木作/油漆等施工阶段", sequenceNum: 4],
+                            [name: "竣工验收", description: "组织甲乙双方验收并移交", sequenceNum: 5]
+                    ],
+                    ENGINEERING: [
+                            [name: "需求评估", description: "明确工程范围、资源、合规", sequenceNum: 1],
+                            [name: "资源调度", description: "锁定供应商与施工班组", sequenceNum: 2],
+                            [name: "材料设备采购", description: "确认清单并下单、到料", sequenceNum: 3],
+                            [name: "现场执行", description: "落地安装/施工及巡检", sequenceNum: 4],
+                            [name: "验收与结算", description: "收集签字单据并结算", sequenceNum: 5]
+                    ]
             ]
 
-            taskTemplates.each { Map task ->
+            List<Map<String, Object>> selectedTemplates = []
+
+            String templateLocation = System.getProperty("hivemind.task.templates.location") ?:
+                    System.getenv("HIVEMIND_TASK_TEMPLATES") ?:
+                    ec.ecfi.getConfValue("hivemind.task.templates.location") ?:
+                    "component://moqui-marketplace/config/hivemind-task-templates.json"
+            try {
+                def ref = ec.resource.getLocationReference(templateLocation)
+                if (ref?.exists) {
+                    String jsonText = ref.getText()
+                    if (jsonText) {
+                        def parsed = new JsonSlurper().parseText(jsonText)
+                        if (parsed instanceof Map) {
+                            def templateFromFile = parsed[resolvedType] ?: parsed[resolvedType.toLowerCase()]
+                            if (templateFromFile instanceof Collection) {
+                                selectedTemplates = templateFromFile.collect { it instanceof Map ? new LinkedHashMap(it) : [:] }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                ec.logger.warn("读取自定义HiveMind任务模板失败: ${e.message}")
+            }
+
+            if (!selectedTemplates) {
+                selectedTemplates = defaultTemplates[resolvedType] ?: defaultTemplates.EXHIBITION_SETUP
+            }
+
+            selectedTemplates.each { Map task ->
                 def taskResult = ec.service.sync().name("create#mantle.work.effort.WorkEffort").parameters([
-                    parentWorkEffortId : workEffortId,
-                    workEffortTypeId   : "TASK",
-                    workEffortName     : task.name,
-                    description        : task.description,
-                    sequenceNum        : task.sequenceNum,
-                    statusId           : "WIP_TASK_CREATED"
+                        parentWorkEffortId : workEffortId,
+                        workEffortTypeId   : "TASK",
+                        workEffortName     : task.name,
+                        description        : task.description,
+                        sequenceNum        : task.sequenceNum,
+                        statusId           : "WIP_TASK_CREATED"
                 ]).call()
 
                 if (hiveMindProjectId) {
                     ec.service.sync().name("marketplace.MarketplaceServices.call#HiveMindApi").parameters([
-                        endpoint   : "https://hivemind.example.com/api/projects/${hiveMindProjectId}/tasks",
-                        requestData: [
-                            name             : task.name,
-                            description      : task.description,
-                            sequenceNumber   : task.sequenceNum,
-                            moquiWorkEffortId: taskResult.workEffortId
-                        ]
+                            path       : "/projects/${hiveMindProjectId}/tasks",
+                            requestData: [
+                                    name             : task.name,
+                                    description      : task.description,
+                                    sequenceNumber   : task.sequenceNum,
+                                    moquiWorkEffortId: taskResult.workEffortId,
+                                    projectType      : resolvedType
+                            ]
                     ]).call()
                 }
             }
         ]]></script></actions>
+    </service>
+
+    <service verb="sync" noun="HiveMindProjectStatus" authenticate="true">
+        <description>从HiveMind获取最新项目状态并更新本地记录</description>
+        <in-parameters>
+            <parameter name="hiveMindProjectId"/>
+            <parameter name="workEffortId"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="projectStatus"/>
+            <parameter name="response" type="Map"/>
+            <parameter name="success" type="Boolean"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            import groovy.json.JsonOutput
+
+            def projectFind = ec.entity.find("marketplace.project.HiveMindProject")
+            if (hiveMindProjectId) projectFind.condition("hiveMindProjectId", hiveMindProjectId)
+            if (workEffortId) projectFind.condition("workEffortId", workEffortId)
+            def projectValue = projectFind.one()
+
+            if (!projectValue) {
+                ec.message.addError("未找到对应的HiveMind项目关联记录")
+                return
+            }
+
+            String targetProjectId = projectValue.getString("hiveMindProjectId")
+            if (!targetProjectId) {
+                ec.message.addError("记录缺少hiveMindProjectId，无法同步")
+                return
+            }
+
+            def apiResult = ec.service.sync().name("marketplace.MarketplaceServices.call#HiveMindApi").parameters([
+                    path          : "/projects/${targetProjectId}",
+                    httpMethod    : "GET",
+                    retryOnFailure: false
+            ]).call()
+
+            success = apiResult.success
+            response = apiResult.response ?: [:]
+            projectStatus = response?.status ?: response?.projectStatus
+
+            projectValue.set("lastSyncDate", ec.user.nowTimestamp)
+            projectValue.set("lastStatusCode", apiResult.statusCode?.toString())
+            projectValue.set("lastResponsePayload", apiResult.response ? JsonOutput.toJson(apiResult.response) : apiResult.rawResponse)
+            projectValue.set("lastRequestPayload", null)
+            if (projectStatus) projectValue.set("syncStatus", projectStatus.toString())
+            if (apiResult.success) {
+                projectValue.set("syncErrorMessage", null)
+            } else {
+                String errorMsg = ec.message?.getMessagesString() ?: ec.message?.messagesString ?: "HiveMind API 调用失败"
+                projectValue.set("syncErrorMessage", errorMsg)
+            }
+            projectValue.store()
+        ]]></script></actions>
+    </service>
+
+    <service verb="fetch" noun="HiveMindProjectTasks" authenticate="true">
+        <description>获取项目任务列表，可选择从HiveMind实时拉取</description>
+        <in-parameters>
+            <parameter name="hiveMindProjectId"/>
+            <parameter name="workEffortId"/>
+            <parameter name="maxResults" type="Integer" default="10"/>
+            <parameter name="refreshRemote" type="Boolean" default="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="tasks" type="List"/>
+            <parameter name="source"/>
+            <parameter name="success" type="Boolean"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            import groovy.json.JsonOutput
+
+            def projectFind = ec.entity.find("marketplace.project.HiveMindProject")
+            if (hiveMindProjectId) projectFind.condition("hiveMindProjectId", hiveMindProjectId)
+            if (workEffortId) projectFind.condition("workEffortId", workEffortId)
+            projectFind.disableAuthz()
+            def projectValue = projectFind.one()
+
+            if (!projectValue) {
+                ec.message.addError("未找到HiveMind项目记录")
+                return
+            }
+
+            String targetProjectId = projectValue.getString("hiveMindProjectId")
+            String targetWorkEffortId = workEffortId ?: projectValue.getString("workEffortId")
+            List<Map<String, Object>> taskList = []
+            boolean remoteSuccess = false
+
+            if (refreshRemote != false && targetProjectId) {
+                try {
+                    def apiResult = ec.service.sync().name("marketplace.MarketplaceServices.call#HiveMindApi").parameters([
+                            path          : "/projects/${targetProjectId}/tasks",
+                            httpMethod    : "GET",
+                            retryOnFailure: false
+                    ]).call()
+
+                    if (apiResult.success) {
+                        remoteSuccess = true
+                        def responseTasks = apiResult.response?.tasks ?: apiResult.response
+                        if (responseTasks instanceof Collection) {
+                            responseTasks.each { Object taskObj ->
+                                Map taskMap = taskObj instanceof Map ? (Map) taskObj : [:]
+                                taskList.add([
+                                        name       : taskMap.name ?: taskMap.title ?: "未命名任务",
+                                        status     : taskMap.status ?: taskMap.state ?: "UNKNOWN",
+                                        assignedTo : taskMap.assignee ?: taskMap.owner,
+                                        dueDate    : taskMap.dueDate ?: taskMap.deadline,
+                                        progress   : taskMap.progress,
+                                        source     : "HIVEMIND",
+                                        externalId : taskMap.id ?: taskMap.taskId,
+                                        description: taskMap.description
+                                ])
+                            }
+                        }
+
+                        projectValue.set("lastResponsePayload", apiResult.response ? JsonOutput.toJson(apiResult.response) : apiResult.rawResponse)
+                        projectValue.set("lastRequestPayload", null)
+                        projectValue.set("lastStatusCode", apiResult.statusCode?.toString())
+                        projectValue.set("lastSyncDate", ec.user.nowTimestamp)
+                        projectValue.store()
+                    }
+                } catch (Exception e) {
+                    ec.logger.warn("加载HiveMind任务失败: ${e.message}")
+                }
+            }
+
+            if (taskList.isEmpty() && targetWorkEffortId) {
+                def localTasks = ec.entity.find("mantle.work.effort.WorkEffort")
+                        .condition("parentWorkEffortId", targetWorkEffortId)
+                        .orderBy("sequenceNum")
+                        .disableAuthz()
+                        .list()
+                localTasks?.each { lt ->
+                    taskList.add([
+                            name       : lt.getString("workEffortName") ?: lt.getString("workEffortId"),
+                            status     : lt.getString("statusId"),
+                            assignedTo : lt.getString("currentStatusId"),
+                            dueDate    : lt.getTimestamp("estimatedCompletionDate"),
+                            source     : "LOCAL",
+                            workEffortId: lt.getString("workEffortId"),
+                            description: lt.getString("description")
+                    ])
+                }
+            }
+
+            if (taskList && maxResults) {
+                taskList = taskList.take(((maxResults ?: 10) as Integer))
+            }
+
+            tasks = taskList
+            source = remoteSuccess ? "HIVEMIND" : "LOCAL"
+            success = true
+        ]]></script></actions>
+    </service>
+
+    <service verb="notify" noun="TelegramProjectUpdate" authenticate="true">
+        <description>向Telegram用户推送项目状态/任务更新</description>
+        <in-parameters>
+            <parameter name="chatId" required="true"/>
+            <parameter name="messageText" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            import java.net.URI
+            import java.net.http.HttpClient
+            import java.net.http.HttpRequest
+            import java.net.http.HttpResponse
+            import java.time.Duration
+            import groovy.json.JsonOutput
+
+            String token = System.getProperty("telegram.bot.token") ?:
+                    System.getenv("TELEGRAM_BOT_TOKEN") ?:
+                    ec.ecfi.getConfValue("telegram.bot.token")
+            if (!token) {
+                ec.logger.warn("缺少telegram.bot.token配置，无法发送项目通知")
+                success = false
+                return
+            }
+
+            Map payload = [
+                    chat_id   : chatId,
+                    text      : messageText,
+                    parse_mode: "Markdown"
+            ]
+
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(20))
+                    .build()
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.telegram.org/bot${token}/sendMessage"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(JsonOutput.toJson(payload)))
+                    .timeout(Duration.ofSeconds(20))
+                    .build()
+
+            try {
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString())
+                success = response.statusCode() == 200
+                if (!success) {
+                    ec.logger.warn("Telegram项目通知失败: HTTP ${response.statusCode()} -> ${response.body()}")
+                    ec.message.addError("Telegram通知失败: ${response.statusCode()}")
+                }
+            } catch (Exception e) {
+                ec.logger.warn("发送Telegram项目通知异常: ${e.message}")
+                ec.message.addError("Telegram通知异常: ${e.message}")
+                success = false
+            }
+        ]]></script></actions>
+    </service>
+
+    <service verb="monitor" noun="HiveMindProjects" authenticate="true">
+        <description>定时检查HiveMind项目状态/任务并自动发送提醒</description>
+        <in-parameters>
+            <parameter name="maxProjects" type="Integer" default="5"/>
+            <parameter name="syncBeforeHours" type="Integer" default="4"/>
+            <parameter name="targetProjectType"/>
+            <parameter name="webhookEnabled" type="Boolean"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="processedCount" type="Integer"/>
+            <parameter name="notifiedCount" type="Integer"/>
+            <parameter name="webhookCount" type="Integer"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            import java.sql.Timestamp
+            import java.time.Duration
+            import groovy.json.JsonOutput
+            import groovy.json.JsonSlurper
+            import java.net.URI
+            import java.net.http.HttpClient
+            import java.net.http.HttpRequest
+            import java.net.http.HttpResponse
+
+            int limit = (maxProjects ?: 5) as int
+            int thresholdHours = (syncBeforeHours ?: 4) as int
+            Timestamp nowTs = ec.user.nowTimestamp
+            Timestamp thresholdTs = new Timestamp(nowTs.time - (thresholdHours * 3600_000L))
+
+            def projectFind = ec.entity.find("marketplace.project.HiveMindProject")
+                    .condition("lastNotifyDate", org.moqui.entity.EntityCondition.LESS_THAN, thresholdTs)
+                    .or(
+                        org.moqui.entity.EntityCondition.makeCondition("lastNotifyDate", org.moqui.entity.EntityCondition.EQUALS, null)
+                    )
+                    .orderBy("lastNotifyDate NULLS FIRST", "-lastSyncDate")
+                    .limit(limit)
+            if (targetProjectType) {
+                projectFind.condition("projectType", targetProjectType.toUpperCase())
+            }
+            projectFind.disableAuthz()
+            def projectList = projectFind.list()
+
+            processedCount = projectList?.size() ?: 0
+            notifiedCount = 0
+            webhookCount = 0
+
+            String webhookLocation = System.getProperty("hivemind.monitor.webhook.config") ?:
+                    System.getenv("HIVEMIND_MONITOR_WEBHOOK") ?:
+                    ec.ecfi.getConfValue("hivemind.monitor.webhook.config") ?:
+                    "component://moqui-marketplace/config/hivemind-monitor-webhook.json"
+            Map webhookConfig = [:]
+            boolean webhookEnabledParam = webhookEnabled == true
+            try {
+                def ref = ec.resource.getLocationReference(webhookLocation)
+                if (ref?.exists) {
+                    String jsonText = ref.getText()
+                    if (jsonText) {
+                        def parsed = new JsonSlurper().parseText(jsonText)
+                        if (parsed instanceof Map) webhookConfig.putAll(parsed)
+                    }
+                }
+            } catch (Exception e) {
+                ec.logger.warn("读取Webhook配置失败: ${e.message}")
+            }
+
+            boolean webhookEnabledFlag = webhookEnabledParam || (webhookConfig.enabled == true)
+            String webhookUrl = webhookConfig.url
+            String webhookToken = webhookConfig.token
+            int webhookTimeout = (webhookConfig.timeoutSeconds ?: 10) as int
+            HttpClient webhookClient = null
+            if (webhookEnabledFlag && webhookUrl) {
+                webhookClient = HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofSeconds(webhookTimeout))
+                        .build()
+            }
+
+            projectList?.each { projectValue ->
+                String hiveMindProjectId = projectValue.getString("hiveMindProjectId")
+                String workEffortId = projectValue.getString("workEffortId")
+                String listingId = projectValue.getString("listingId")
+
+                Map syncParams = [:]
+                if (hiveMindProjectId) syncParams.hiveMindProjectId = hiveMindProjectId
+                if (!syncParams && workEffortId) syncParams.workEffortId = workEffortId
+
+                Map syncResult = [:]
+                if (syncParams) {
+                    try {
+                        syncResult = ec.service.sync().name("marketplace.MarketplaceServices.sync#HiveMindProjectStatus")
+                                .parameters(syncParams).call()
+                    } catch (Exception e) {
+                        ec.logger.warn("自动同步项目状态失败: ${e.message}")
+                    }
+                }
+
+                Map taskResult = [:]
+                if (syncParams) {
+                    try {
+                        taskResult = ec.service.sync().name("marketplace.MarketplaceServices.fetch#HiveMindProjectTasks")
+                                .parameters(syncParams + [maxResults: 3]).call()
+                    } catch (Exception e) {
+                        ec.logger.warn("拉取项目任务失败: ${e.message}")
+                    }
+                }
+
+                def listing = listingId ? ec.entity.find("marketplace.listing.Listing")
+                        .condition("listingId", listingId)
+                        .disableAuthz()
+                        .one() : null
+                String chatId = listing?.publisherId
+                if (!chatId) return
+
+                String projectStatus = syncResult.projectStatus ?: projectValue.getString("syncStatus") ?: "UNKNOWN"
+                String lastSyncText = projectValue.getTimestamp("lastSyncDate") ? ec.l10n.format(projectValue.getTimestamp("lastSyncDate"), "yyyy-MM-dd HH:mm") : "—"
+                List tasks = taskResult.tasks instanceof List ? (List) taskResult.tasks : []
+
+                StringBuilder sb = new StringBuilder()
+                sb.append("🔔 *项目跟进提醒*\n")
+                sb.append("• 项目: ${hiveMindProjectId ?: workEffortId ?: '未同步'}\n")
+                sb.append("• 状态: ${projectStatus}\n")
+                sb.append("• 上次同步: ${lastSyncText}\n")
+                if (tasks) {
+                    sb.append("\n最近任务：\n")
+                    tasks.each { Map t ->
+                        sb.append("• ${t.name ?: '未命名'} (${t.status ?: 'UNKNOWN'})\n")
+                    }
+                    sb.append("\n如需详情可发送 `/project tasks ${hiveMindProjectId ?: workEffortId}`")
+                } else {
+                    sb.append("\n暂无任务信息，可发送 `/project status` 获取最新进度")
+                }
+
+                Map notifyResult = ec.service.sync().name("marketplace.MarketplaceServices.notify#TelegramProjectUpdate")
+                        .parameters([chatId: chatId, messageText: sb.toString()])
+                        .call()
+                if (notifyResult.success) {
+                    notifiedCount = (notifiedCount ?: 0) + 1
+                    projectValue.set("lastNotifyDate", nowTs)
+                    projectValue.store()
+                }
+
+                if (webhookEnabledFlag && webhookClient && webhookUrl) {
+                    Map webhookPayload = [
+                            projectId      : hiveMindProjectId ?: workEffortId,
+                            workEffortId   : workEffortId,
+                            listingId      : listingId,
+                            projectType    : projectValue.getString("projectType"),
+                            status         : projectStatus,
+                            syncTimestamp  : nowTs.toString(),
+                            tasks          : tasks,
+                            listingTitle   : listing?.title ?: listingId,
+                            notifyText     : sb.toString()
+                    ]
+                    try {
+                        HttpRequest.Builder builder = HttpRequest.newBuilder()
+                                .uri(URI.create(webhookUrl))
+                                .header("Content-Type", "application/json")
+                                .timeout(Duration.ofSeconds(webhookTimeout))
+                        if (webhookToken) builder.header("Authorization", "Bearer ${webhookToken}")
+                        builder.POST(HttpRequest.BodyPublishers.ofString(JsonOutput.toJson(webhookPayload)))
+                        HttpResponse<String> resp = webhookClient.send(builder.build(), HttpResponse.BodyHandlers.ofString())
+                        if (resp.statusCode() >= 200 && resp.statusCode() < 300) {
+                            webhookCount = (webhookCount ?: 0) + 1
+                        } else {
+                            ec.logger.warn("HiveMind Webhook 通知失败: HTTP ${resp.statusCode()} -> ${resp.body()}")
+                        }
+                    } catch (Exception e) {
+                        ec.logger.warn("HiveMind Webhook 通知异常: ${e.message}")
+                    }
+                }
+            }
+        ]]></script></actions>
+    </service>
+
+    <!-- ==================== 电商辅助服务 ==================== -->
+    <service verb="get" noun="EcommerceProducts" authenticate="true">
+        <description>获取电商商品列表（Telegram/REST共用）</description>
+        <in-parameters>
+            <parameter name="productCategoryId"/>
+            <parameter name="status"/>
+            <parameter name="limit" type="Integer" default="20"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="products" type="List"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                def find = ec.entity.makeFind("marketplace.ecommerce.EcommerceProduct")
+                if (productCategoryId) find.condition("productCategoryId", productCategoryId)
+                if (status) find.condition("status", status)
+                int max = (limit ?: 20) as int
+                def entityList = find.orderBy("-lastUpdatedDate").limit(max).list()
+                products = entityList ? entityList.collect { it.getMap(false) } : []
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="get" noun="EcommerceRecommendations" authenticate="true">
+        <description>获取推荐电商商品列表（占位实现）</description>
+        <in-parameters>
+            <parameter name="limit" type="Integer" default="5"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="recommendations" type="List"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                def find = ec.entity.makeFind("marketplace.ecommerce.EcommerceProduct")
+                        .condition("status", "ACTIVE")
+                        .orderBy("-lastUpdatedDate")
+                        .limit((limit ?: 5) as int)
+                def entityList = find.list()
+                recommendations = entityList ? entityList.collect { it.getMap(false) } : []
+            ]]></script>
+        </actions>
     </service>
 
 </services>

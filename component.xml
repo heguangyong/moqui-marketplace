@@ -6,9 +6,17 @@
     <depends-on name="mantle-udm"/>
     <depends-on name="mantle-usl"/>
 
+    <entity-facade>
+        <entity-include location="component://moqui-marketplace/entity/MarketplaceEntities.xml"/>
+        <entity-include location="component://moqui-marketplace/entity/ProjectEntities.xml"/>
+        <entity-include location="component://moqui-marketplace/entity/EcommerceEntities.xml"/>
+    </entity-facade>
+
     <!-- 服务文件包含 -->
     <service-include location="component://moqui-marketplace/service/marketplace.xml"/>
     <service-include location="component://moqui-marketplace/service/MarketplaceServices.xml"/>
+    <service-include location="component://moqui-marketplace/service/EcommerceServices.xml"/>
+    <service-include location="component://moqui-marketplace/service/HiveMindWebhookServices.xml"/>
 
     <!-- REST API 资源定义 -->
     <webapp-list>

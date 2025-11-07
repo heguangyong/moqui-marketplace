@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<entities xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/entity-definition-3.xsd">
+
+    <entity entity-name="ProjectInfo" package="marketplace.project">
+        <description>独立的项目基础信息，与供需匹配解耦</description>
+        <field name="projectId" type="id" is-pk="true"/>
+        <field name="projectName" type="text-medium"/>
+        <field name="description" type="text-long"/>
+        <field name="projectType" type="text-short"/>
+        <field name="status" type="text-short" default="PLANNING"/>
+        <field name="startDate" type="date-time"/>
+        <field name="endDate" type="date-time"/>
+        <field name="budget" type="currency-precise"/>
+        <field name="clientName" type="text-medium"/>
+        <field name="workEffortId" type="id"/>
+        <field name="createdDate" type="date-time"/>
+        <field name="lastUpdatedDate" type="date-time"/>
+
+        <relationship type="one" related="mantle.work.effort.WorkEffort" short-alias="workEffort">
+            <key-map field-name="workEffortId" related="workEffortId"/>
+        </relationship>
+
+        <index name="PROJECTINFO_WORKEFFORT_IDX" unique="false">
+            <index-field name="workEffortId"/>
+        </index>
+    </entity>
+
+</entities>

@@ -83,11 +83,9 @@
         <relationship type="one" related="mantle.party.Party" short-alias="publisher">
             <key-map field-name="publisherId" related="partyId"/>
         </relationship>
-        <!-- Temporarily comment out GeoPoint relationship until proper entity is found
-        <relationship type="one" related="mantle.humanres.position.GeoPoint" short-alias="geoPoint">
+        <relationship type="one" related="moqui.basic.GeoPoint" short-alias="geoPoint">
             <key-map field-name="geoPointId"/>
         </relationship>
-        -->
 
         <index name="LISTING_TYPE_STATUS" unique="false">
             <index-field name="listingType"/>
@@ -171,6 +169,36 @@
         <relationship type="one" related="Tag" short-alias="tag">
             <key-map field-name="tagId"/>
         </relationship>
+    </entity>
+
+    <entity entity-name="ListingInsight" package="marketplace.listing">
+        <description>多模态识别产生的结构化信息，用于增强匹配效果</description>
+        <field name="listingId" type="id" is-pk="true"/>
+        <field name="insightSeqId" type="id" is-pk="true"/>
+        <field name="insightType" type="text-short">
+            <description>TEXT/VOICE/IMAGE/VIDEO等数据类型</description>
+        </field>
+        <field name="sourceType" type="text-short">
+            <description>SMART_CLASSIFIER、TELEGRAM_BOT、MANUAL等</description>
+        </field>
+        <field name="confidence" type="number-decimal"/>
+        <field name="summary" type="text-medium">
+            <description>对识别结果的简短说明（便于人工审核）</description>
+        </field>
+        <field name="metadataJson" type="text-long">
+            <description>识别出的结构化JSON数据（面积、预算、材质等）</description>
+        </field>
+        <field name="createdDate" type="date-time"/>
+
+        <relationship type="one" related="Listing" short-alias="listing">
+            <key-map field-name="listingId"/>
+        </relationship>
+
+        <index name="LISTING_INSIGHT_TYPE" unique="false">
+            <index-field name="listingId"/>
+            <index-field name="insightType"/>
+            <index-field name="createdDate"/>
+        </index>
     </entity>
 
     <!-- ==================== 撮合记录 ==================== -->
@@ -400,11 +428,9 @@
         <relationship type="one" related="mantle.party.Party" short-alias="party">
             <key-map field-name="partyId"/>
         </relationship>
-        <!-- Temporarily comment out GeoPoint relationship until proper entity is found
-        <relationship type="one" related="mantle.humanres.position.GeoPoint" short-alias="preferredGeoPoint">
+        <relationship type="one" related="moqui.basic.GeoPoint" short-alias="preferredGeoPoint">
             <key-map field-name="preferredGeoPointId" related="geoPointId"/>
         </relationship>
-        -->
     </entity>
 
     <entity entity-name="UserBehavior" package="marketplace.profile">
@@ -475,12 +501,21 @@
 
     <entity entity-name="HiveMindProject" package="marketplace.project">
         <field name="workEffortId" type="id" is-pk="true"/>
+        <field name="projectId" type="id"/>
         <field name="hiveMindProjectId" type="text-medium"/>
         <field name="listingId" type="id"/>
+        <field name="projectType" type="text-short"/>
         <field name="syncStatus" type="text-short" default="PENDING"/>
         <field name="lastSyncDate" type="date-time"/>
         <field name="syncErrorMessage" type="text-long"/>
+        <field name="lastStatusCode" type="text-short"/>
+        <field name="lastRequestPayload" type="text-long"/>
+        <field name="lastResponsePayload" type="text-long"/>
+        <field name="lastNotifyDate" type="date-time"/>
         <relationship type="one" related="mantle.work.effort.WorkEffort"/>
+        <relationship type="one" related="marketplace.project.ProjectInfo" short-alias="projectInfo">
+            <key-map field-name="projectId" related="projectId"/>
+        </relationship>
         <relationship type="one" related="marketplace.listing.Listing"/>
     </entity>
 
