@@ -73,6 +73,21 @@
         </resource>
     </resource>
 
+    <!-- 项目管理 -->
+    <resource name="project">
+        <method type="post">
+            <service name="marketplace.ProjectServices.create#Project"/>
+        </method>
+        <method type="get">
+            <service name="marketplace.ProjectServices.get#ProjectList"/>
+        </method>
+        <resource name="{projectId}">
+            <method type="get">
+                <service name="marketplace.ProjectServices.get#ProjectSummary"/>
+            </method>
+        </resource>
+    </resource>
+
     <!-- 用户画像 -->
     <resource name="profile">
         <resource name="{partyId}">
