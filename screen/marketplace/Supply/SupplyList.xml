@@ -3,7 +3,6 @@
         xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
         default-menu-title="供应列表">
 
-    <parameter name="supplyListingId"/>
     <parameter name="merchantId"/>
 
     <actions>
@@ -13,29 +12,36 @@
 
         <!-- 获取供应列表 - 使用脚本避免权限问题 -->
         <script><![CDATA[
-            supplyListings = []
+            List<Map> normalizedList = []
             try {
-                supplyListings = ec.entity.find("marketplace.SupplyListing")
-                    .condition("merchantPartyId", merchantId)
-                    .orderBy("-createdDate")
-                    .disableAuthz()
-                    .list()
+                def queryResults = ec.entity.find("marketplace.SupplyListing")
+                        .condition("publisherId", merchantId)
+                        .orderBy("-createdDate")
+                        .disableAuthz()
+                        .list()
+                for (def value : queryResults) {
+                    Map entry = value instanceof Map ? new LinkedHashMap(value as Map) : new LinkedHashMap(value.getMap(false))
+                    entry.listingId = entry.listingId ?: entry.supplyListingId
+                    entry.title = entry.title ?: entry.productName ?: "未命名商品"
+                    entry.displayQuantity = entry.quantity ?: entry.stockQuantity
+                    entry.displayPrice = entry.priceMin ?: entry.price ?: entry.unitPrice
+                    normalizedList.add(entry)
+                }
             } catch (Exception e) {
                 ec.logger.warn("无法查询供应列表: ${e.message}")
-                // 提供模拟数据
-                supplyListings = []
                 for (int i = 0; i < 3; i++) {
-                    supplyListings.add([
-                        supplyListingId: "SUPPLY_${i+1}",
-                        productName: ["优质钢材", "水泥原料", "建筑材料"][i],
-                        category: ["钢材", "建材", "装修"][i],
-                        quantity: "${(i+1)*50}吨",
-                        price: (i+1)*1200.0,
-                        status: ["ACTIVE", "PENDING", "ACTIVE"][i],
-                        createdDate: new Date()
+                    normalizedList.add([
+                        listingId      : "SUPPLY_${i + 1}",
+                        title          : ["优质钢材", "水泥原料", "建筑材料"][i],
+                        category       : ["钢材", "建材", "装修"][i],
+                        displayQuantity: "${(i + 1) * 50}吨",
+                        displayPrice   : (i + 1) * 1200.0G,
+                        status         : ["ACTIVE", "PENDING", "ACTIVE"][i],
+                        createdDate    : new Date()
                     ])
                 }
             }
+            supplyListings = normalizedList
         ]]></script>
     </actions>
 
@@ -68,14 +74,16 @@
                         <section-iterate name="SupplyListingsIterate" list="supplyListings" entry="supply">
                             <widgets>
                                 <container style="tr">
-                                    <container style="td"><label text="${supply.supplyListingId ?: '暂无数据'}"/></container>
-                                    <container style="td"><label text="${supply.productName ?: '暂无数据'}"/></container>
+                                    <container style="td"><label text="${supply.listingId ?: '暂无数据'}"/></container>
+                                    <container style="td"><label text="${supply.title ?: '暂无数据'}"/></container>
                                     <container style="td"><label text="${supply.category ?: '暂无数据'}"/></container>
-                                    <container style="td"><label text="${supply.quantity ?: '0'}"/></container>
-                                    <container style="td"><label text="${supply.price ? ec.l10n.formatCurrency(supply.price, null, 2) : '0.00'}"/></container>
+                                    <container style="td"><label text="${supply.displayQuantity ?: (supply.quantity ?: '0')}"/></container>
+                                    <container style="td">
+                                        <label text="${supply.displayPrice ? ec.l10n.formatCurrency(supply.displayPrice, null, 2) : (supply.priceMin ? ec.l10n.formatCurrency(supply.priceMin, null, 2) : '0.00')}"/>
+                                    </container>
                                     <container style="td"><label text="${supply.status ?: '未知'}"/></container>
                                     <container style="td"><label text="${ec.l10n.format(supply.createdDate, 'yyyy-MM-dd')}"/></container>
-                                    <container style="td"><link url="EditSupply" text="编辑" parameter-map="[supplyListingId:supply.supplyListingId]"/></container>
+                                    <container style="td"><link url="EditSupply" text="编辑" parameter-map="[listingId:supply.listingId]"/></container>
                                 </container>
                             </widgets>
                         </section-iterate>

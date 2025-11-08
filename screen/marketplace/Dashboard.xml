@@ -273,24 +273,14 @@
         ]]></script>
     </actions>
     <widgets>
-        <!-- 页面头部 - 使用Quasar 2风格 -->
-        <container style="margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
-            <container style="font-size: 2rem; font-weight: bold; color: #1976d2; margin-bottom: 8px;">
-                <label text="智能推荐控制台"/>
-            </container>
-            <container style="color: #616161; margin-top: 8px; display: flex; gap: 8px;">
-                <label style="background: #1976d2; color: white; padding: 4px 8px; border-radius: 4px; display: inline-block;"
-                       text="当前视角：${displayMerchantName}"/>
-                <label style="background: #4caf50; color: white; padding: 4px 8px; border-radius: 4px; display: inline-block;"
-                       text="Telegram Bot：${botUsername}"/>
-            </container>
+        <container style="margin-bottom:16px;border:1px solid #e0e0e0;border-radius:4px;padding:16px;">
+            <label text="智能推荐控制台" style="font-size:2rem;font-weight:bold;color:#1976d2;display:block"/>
+            <label text="当前视角：${displayMerchantName}" style="background:#1976d2;color:#fff;padding:4px 8px;border-radius:4px;margin-right:8px"/>
+            <label text="Telegram Bot：${botUsername}" style="background:#4caf50;color:#fff;padding:4px 8px;border-radius:4px"/>
         </container>
 
-        <!-- 筛选表单 -->
-        <container style="margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
-            <container style="font-size: 1.25rem; font-weight: 500; margin-bottom: 8px;">
-                <label text="筛选条件"/>
-            </container>
+        <container style="margin-bottom:16px;border:1px solid #e0e0e0;border-radius:4px;padding:16px;">
+            <label text="筛选视角" style="font-size:1.25rem;font-weight:500;margin-bottom:8px;display:block"/>
             <form-single name="FilterForm" method="get">
                 <container-row>
                     <row-col lg="8" md="8" sm="12">
@@ -311,231 +301,157 @@
             </form-single>
         </container>
 
-        <!-- 统计数据区域 -->
-        <container style="font-size: 1.5rem; font-weight: 500; margin-bottom: 16px;">
-            <label text="数据统计"/>
-        </container>
         <container-row>
             <row-col lg="3" md="6" sm="12">
-                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
-                    <label style="font-size: 1.25rem; color: #1976d2;" text="活跃供应"/>
-                    <label style="font-size: 2rem; font-weight: bold; color: #1976d2; margin: 8px 0;"
-                           text="${stats.activeSupplyListings ?: 0}"/>
-                    <label style="font-size: 0.875rem; color: #616161;"
-                           text="总计：${stats.totalSupplyListings ?: 0}"/>
+                <container style="text-align:center;margin-bottom:16px;border:1px solid #e0e0e0;border-radius:4px;padding:16px;">
+                    <label text="活跃供应" style="font-size:1.25rem;color:#1976d2"/>
+                    <label text="${stats.activeSupplyListings ?: 0}" style="font-size:2rem;font-weight:bold;color:#1976d2;margin:8px 0"/>
+                    <label text="总供应 ${stats.totalSupplyListings ?: 0}" style="font-size:0.875rem;color:#616161"/>
                 </container>
             </row-col>
             <row-col lg="3" md="6" sm="12">
-                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
-                    <label style="font-size: 1.25rem; color: #4caf50;" text="活跃需求"/>
-                    <label style="font-size: 2rem; font-weight: bold; color: #4caf50; margin: 8px 0;"
-                           text="${stats.activeDemandListings ?: 0}"/>
-                    <label style="font-size: 0.875rem; color: #616161;"
-                           text="总计：${stats.totalDemandListings ?: 0}"/>
+                <container style="text-align:center;margin-bottom:16px;border:1px solid #e0e0e0;border-radius:4px;padding:16px;">
+                    <label text="活跃需求" style="font-size:1.25rem;color:#4caf50"/>
+                    <label text="${stats.activeDemandListings ?: 0}" style="font-size:2rem;font-weight:bold;color:#4caf50;margin:8px 0"/>
+                    <label text="总需求 ${stats.totalDemandListings ?: 0}" style="font-size:0.875rem;color:#616161"/>
                 </container>
             </row-col>
             <row-col lg="3" md="6" sm="12">
-                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
-                    <label style="font-size: 1.25rem; color: #2196f3;" text="匹配总数"/>
-                    <label style="font-size: 2rem; font-weight: bold; color: #2196f3; margin: 8px 0;"
-                           text="${stats.totalMatches ?: 0}"/>
-                    <label style="font-size: 0.875rem; color: #616161;"
-                           text="平均匹配度：${matchingStats?.averageScore != null ? ec.l10n.format(matchingStats.averageScore * 100, '##0.0') + '%' : '—'}"/>
+                <container style="text-align:center;margin-bottom:16px;border:1px solid #e0e0e0;border-radius:4px;padding:16px;">
+                    <label text="智能匹配" style="font-size:1.25rem;color:#2196f3"/>
+                    <label text="${stats.totalMatches ?: 0}" style="font-size:2rem;font-weight:bold;color:#2196f3;margin:8px 0"/>
+                    <label text="今日成功 ${matchingStats?.todayMatches ?: 0}" style="font-size:0.875rem;color:#616161"/>
                 </container>
             </row-col>
             <row-col lg="3" md="6" sm="12">
-                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
-                    <label style="font-size: 1.25rem; color: #ff9800;" text="Telegram 会话"/>
-                    <label style="font-size: 2rem; font-weight: bold; color: #ff9800; margin: 8px 0;"
-                           text="${telegramStats.totalSessions ?: 0}"/>
-                    <label style="font-size: 0.875rem; color: #616161;"
-                           text="今日新增：${telegramStats.todaySessions ?: 0}"/>
+                <container style="text-align:center;margin-bottom:16px;border:1px solid #e0e0e0;border-radius:4px;padding:16px;">
+                    <label text="Telegram 会话" style="font-size:1.25rem;color:#ff9800"/>
+                    <label text="${telegramStats.activeSessions ?: 0}" style="font-size:2rem;font-weight:bold;color:#ff9800;margin:8px 0"/>
+                    <label text="今日新增 ${telegramStats.todaySessions ?: 0}" style="font-size:0.875rem;color:#616161"/>
                 </container>
             </row-col>
         </container-row>
 
-        <!-- 次要统计数据 -->
         <container-row>
             <row-col lg="3" md="6" sm="12">
-                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
-                    <label style="font-size: 1rem;" text="活跃会话"/>
-                    <label style="font-size: 1.5rem; font-weight: bold; margin: 8px 0;"
-                           text="${telegramStats.activeSessions ?: 0}"/>
+                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
+                    <label text="📊 智能供需匹配" style="font-size:1.25rem;font-weight:500"/>
+                    <label text="聚焦供需录入、匹配与履约回传" style="display:block;margin-top:8px"/>
+                    <link url="../Matching" text="查看匹配监控" link-type="anchor" style="margin-top:8px;display:inline-block"/>
                 </container>
             </row-col>
             <row-col lg="3" md="6" sm="12">
-                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
-                    <label style="font-size: 1rem;" text="最近匹配得分"/>
-                    <label style="font-size: 1.5rem; font-weight: bold; margin: 8px 0;"
-                           text="${recentMatchesDisplay ? recentMatchesDisplay[0].matchScorePercent + '%' : '—'}"/>
+                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
+                    <label text="🏗️ 蜂巢项目管理" style="font-size:1.25rem;font-weight:500"/>
+                    <label text="项目独立运行，可通过 /project 指令管理" style="display:block;margin-top:8px"/>
+                    <link url="../SystemConfig" text="配置 HiveMind 回调" link-type="anchor" style="margin-top:8px;display:inline-block"/>
                 </container>
             </row-col>
             <row-col lg="3" md="6" sm="12">
-                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
-                    <label style="font-size: 1rem;" text="最近供应"/>
-                    <label style="font-size: 1.5rem; font-weight: bold; margin: 8px 0;"
-                           text="${recentSupplies ? recentSupplies.size() : 0}"/>
+                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
+                    <label text="🛒 流行电商" style="font-size:1.25rem;font-weight:500"/>
+                    <label text="商品、订单、库存正接入 Telegram" style="display:block;margin-top:8px"/>
+                    <label text="当前状态：菜单联调" style="color:#9e9e9e;display:block"/>
                 </container>
             </row-col>
             <row-col lg="3" md="6" sm="12">
-                <container style="text-align: center; margin-bottom: 16px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 16px;">
-                    <label style="font-size: 1rem;" text="最近需求"/>
-                    <label style="font-size: 1.5rem; font-weight: bold; margin: 8px 0;"
-                           text="${recentDemands ? recentDemands.size() : 0}"/>
+                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
+                    <label text="💼 大理石 ERP" style="font-size:1.25rem;font-weight:500"/>
+                    <label text="生产计划、成本、库存流程适配中" style="display:block;margin-top:8px"/>
+                    <label text="当前状态：架构设计" style="color:#9e9e9e;display:block"/>
                 </container>
             </row-col>
         </container-row>
 
-        <container>
-            <label text="Telegram 会话列表" type="h4"/>
-            <container style="table table-striped">
-                <container style="thead">
-                    <container style="tr">
-                        <container style="th"><label text="会话ID"/></container>
-                        <container style="th"><label text="客户/商户"/></container>
-                        <container style="th"><label text="状态"/></container>
-                        <container style="th"><label text="阶段"/></container>
-                        <container style="th"><label text="最后意图"/></container>
-                        <container style="th"><label text="最近消息"/></container>
-                        <container style="th"><label text="更新时间"/></container>
-                    </container>
+        <container-row>
+            <row-col lg="6" md="6" sm="12">
+                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
+                    <label text="实时匹配监控" style="font-size:1.25rem;font-weight:500"/>
+                    <if condition="recentMatchesDisplay">
+                        <container style="table table-striped margin-top">
+                            <container style="thead">
+                                <container style="tr">
+                                    <container style="th"><label text="匹配对"/></container>
+                                    <container style="th"><label text="分数"/></container>
+                                    <container style="th"><label text="状态"/></container>
+                                </container>
+                            </container>
+                            <container style="tbody">
+                                <section-iterate list="recentMatchesDisplay" entry="match">
+                                    <widgets>
+                                        <container style="tr">
+                                            <container style="td"><label text="${match.supplyTitle ?: '未命名'} ↔ ${match.demandTitle ?: '未命名'}"/></container>
+                                            <container style="td"><label text="${match.matchScorePercent ?: '0'}%"/></container>
+                                            <container style="td"><label text="${match.status ?: 'SUGGESTED'}"/></container>
+                                        </container>
+                                    </widgets>
+                                </section-iterate>
+                            </container>
+                        </container>
+                    </if>
+                    <if condition="!recentMatchesDisplay">
+                        <label text="暂无匹配记录" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                    </if>
                 </container>
-                <container style="tbody">
-                    <section-iterate name="TelegramSessionsIterate" list="telegramSessionsDisplay" entry="session">
+            </row-col>
+            <row-col lg="6" md="6" sm="12">
+                <container style="border:1px solid #ffe0b2;border-radius:4px;padding:16px;margin-bottom:16px;background:#fff8e1;">
+                    <label text="Telegram 会话概览" style="font-size:1.25rem;font-weight:500"/>
+                    <label text="Bot：${botUsername}" style="display:block;margin-top:8px"/>
+                    <label text="会话总数：${telegramStats.totalSessions ?: 0}" style="display:block"/>
+                    <label text="活跃会话：${telegramStats.activeSessions ?: 0}" style="display:block"/>
+                    <label text="今日新增：${telegramStats.todaySessions ?: 0}" style="display:block"/>
+                    <section-iterate list="recentTelegramMessagesDisplay" entry="msg">
                         <widgets>
-                            <container style="tr">
-                                <container style="td"><label text="${session.sessionId ?: '—'}"/></container>
-                                <container style="td"><label text="${session.customerName ?: '—'}"/></container>
-                                <container style="td"><label text="${session.status ?: '—'}"/></container>
-                                <container style="td"><label text="${session.currentPhase ?: '—'}"/></container>
-                                <container style="td"><label text="${session.lastIntent ?: '—'}"/></container>
-                                <container style="td"><label text="${session.lastMessage ?: '—'}"/></container>
-                                <container style="td"><label text="${session.updatedDate ? ec.l10n.format(session.updatedDate, 'yyyy-MM-dd HH:mm') : '—'}"/></container>
+                            <container style="margin-top:12px;padding:12px;border-bottom:1px solid #ffe0b2;">
+                                <label text="${msg.chatSummary ?: 'Telegram 会话'}" style="display:block;font-weight:bold"/>
+                                <label text="${msg.lastMessageText ?: '暂无摘要'}" style="display:block"/>
+                                <label text="${msg.lastMessageTime ? ec.l10n.format(msg.lastMessageTime, 'MM-dd HH:mm') : ''}" style="color:#9e9e9e;display:block"/>
                             </container>
                         </widgets>
                     </section-iterate>
+                    <if condition="!recentTelegramMessagesDisplay">
+                        <label text="暂无Telegram消息" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                    </if>
                 </container>
-            </container>
-        </container>
+            </row-col>
+        </container-row>
 
-        <container>
-            <label text="最新 Telegram 消息" type="h4"/>
-            <container style="table table-striped">
-                <container style="thead">
-                    <container style="tr">
-                        <container style="th"><label text="会话ID"/></container>
-                        <container style="th"><label text="商户"/></container>
-                        <container style="th"><label text="用户消息"/></container>
-                        <container style="th"><label text="AI 回复"/></container>
-                        <container style="th"><label text="意图"/></container>
-                        <container style="th"><label text="时间"/></container>
-                    </container>
-                </container>
-                <container style="tbody">
-                    <section-iterate name="TelegramMessagesIterate" list="recentTelegramMessagesDisplay" entry="message">
+        <container-row>
+            <row-col lg="6" md="6" sm="12">
+                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
+                    <label text="最新供应" style="font-size:1.25rem;font-weight:500"/>
+                    <section-iterate list="recentSupplies" entry="supply">
                         <widgets>
-                            <container style="tr">
-                                <container style="td"><label text="${message.sessionId ?: '—'}"/></container>
-                                <container style="td"><label text="${message.merchantName ?: '—'}"/></container>
-                                <container style="td"><label text="${message.content ?: '—'}"/></container>
-                                <container style="td"><label text="${message.aiResponse ?: '—'}"/></container>
-                                <container style="td"><label text="${message.intent ?: '—'}"/></container>
-                                <container style="td"><label text="${message.processedDate ? ec.l10n.format(message.processedDate, 'MM-dd HH:mm') : '—'}"/></container>
+                            <container style="margin-top:12px;padding:12px;border-bottom:1px solid #eeeeee;">
+                                <label text="${supply.title ?: '未命名供应'}" style="display:block;font-weight:bold"/>
+                                <label text="类别：${supply.category ?: '未知'} · 数量：${supply.quantity ?: '0'}${supply.quantityUnit ?: ''}" style="display:block"/>
+                                <label text="${ec.l10n.format(supply.createdDate, 'yyyy-MM-dd HH:mm')}" style="color:#9e9e9e;display:block"/>
                             </container>
                         </widgets>
                     </section-iterate>
+                    <if condition="!recentSupplies">
+                        <label text="暂无供应信息" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                    </if>
                 </container>
-            </container>
-        </container>
-
-        <container>
-            <label text="最近供应" type="h4"/>
-            <container style="table table-striped">
-                <container style="thead">
-                    <container style="tr">
-                        <container style="th"><label text="标题"/></container>
-                        <container style="th"><label text="数量"/></container>
-                        <container style="th"><label text="价格下限"/></container>
-                        <container style="th"><label text="价格上限"/></container>
-                        <container style="th"><label text="状态"/></container>
-                    </container>
-                </container>
-                <container style="tbody">
-                    <section-iterate name="RecentSupplyIterate" list="recentSupplies" entry="supply">
+            </row-col>
+            <row-col lg="6" md="6" sm="12">
+                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
+                    <label text="最新需求" style="font-size:1.25rem;font-weight:500"/>
+                    <section-iterate list="recentDemands" entry="demand">
                         <widgets>
-                            <container style="tr">
-                                <container style="td"><label text="${supply.title ?: '—'}"/></container>
-                                <container style="td"><label text="${supply.quantity ?: '—'}"/></container>
-                                <container style="td"><label text="${supply.priceMin ? ec.l10n.format(supply.priceMin, '###,##0.00') : '—'}"/></container>
-                                <container style="td"><label text="${supply.priceMax ? ec.l10n.format(supply.priceMax, '###,##0.00') : '—'}"/></container>
-                                <container style="td"><label text="${supply.status ?: '—'}"/></container>
+                            <container style="margin-top:12px;padding:12px;border-bottom:1px solid #eeeeee;">
+                                <label text="${demand.title ?: '未命名需求'}" style="display:block;font-weight:bold"/>
+                                <label text="类别：${demand.category ?: '未知'} · 数量：${demand.quantity ?: '0'}${demand.quantityUnit ?: ''}" style="display:block"/>
+                                <label text="${ec.l10n.format(demand.createdDate, 'yyyy-MM-dd HH:mm')}" style="color:#9e9e9e;display:block"/>
                             </container>
                         </widgets>
                     </section-iterate>
+                    <if condition="!recentDemands">
+                        <label text="暂无需求信息" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                    </if>
                 </container>
-            </container>
-        </container>
-
-        <container>
-            <label text="最近需求" type="h4"/>
-            <container style="table table-striped">
-                <container style="thead">
-                    <container style="tr">
-                        <container style="th"><label text="标题"/></container>
-                        <container style="th"><label text="需求量"/></container>
-                        <container style="th"><label text="预算"/></container>
-                        <container style="th"><label text="状态"/></container>
-                    </container>
-                </container>
-                <container style="tbody">
-                    <section-iterate name="RecentDemandIterate" list="recentDemands" entry="demand">
-                        <widgets>
-                            <container style="tr">
-                                <container style="td"><label text="${demand.title ?: '—'}"/></container>
-                                <container style="td"><label text="${demand.quantity ?: '—'}"/></container>
-                                <container style="td"><label text="${demand.priceMax ? ec.l10n.format(demand.priceMax, '###,##0.00') : '—'}"/></container>
-                                <container style="td"><label text="${demand.status ?: '—'}"/></container>
-                            </container>
-                        </widgets>
-                    </section-iterate>
-                </container>
-            </container>
-        </container>
-
-        <container>
-            <label text="最新撮合结果" type="h4"/>
-            <container style="table table-striped">
-                <container style="thead">
-                    <container style="tr">
-                        <container style="th"><label text="供应"/></container>
-                        <container style="th"><label text="需求"/></container>
-                        <container style="th"><label text="匹配度(%)"/></container>
-                        <container style="th"><label text="状态"/></container>
-                        <container style="th"><label text="时间"/></container>
-                    </container>
-                </container>
-                <container style="tbody">
-                    <section-iterate name="RecentMatchIterate" list="recentMatchesDisplay" entry="match">
-                        <widgets>
-                            <container style="tr">
-                                <container style="td"><label text="${match.supplyTitle ?: '—'}"/></container>
-                                <container style="td"><label text="${match.demandTitle ?: '—'}"/></container>
-                                <container style="td"><label text="${match.matchScorePercent ?: '—'}"/></container>
-                                <container style="td"><label text="${match.status ?: '—'}"/></container>
-                                <container style="td"><label text="${match.suggestedDate ? ec.l10n.format(match.suggestedDate, 'MM-dd HH:mm') : '—'}"/></container>
-                            </container>
-                        </widgets>
-                    </section-iterate>
-                </container>
-            </container>
-        </container>
-
-        <container>
-            <label text="快速操作" type="h4"/>
-            <link url="../Supply/CreateSupply" text="发布新供应" btn-type="primary"/>
-            <link url="../Demand/CreateDemand" text="发布新需求" btn-type="info"/>
-            <link url="../Matching" text="查看撮合结果" btn-type="success"/>
-            <link url="../Chat" text="打开 AI 助手" btn-type="warning"/>
-        </container>
+            </row-col>
+        </container-row>
     </widgets>
 </screen>

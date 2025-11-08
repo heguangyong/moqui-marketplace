@@ -24,22 +24,173 @@ public class SmartMatchingEngine {
 
     private final ExecutionContext ec;
 
-    // 权重配置
-    private static final BigDecimal WEIGHT_TAG_SIMILARITY = new BigDecimal("0.30");
-    private static final BigDecimal WEIGHT_GEO_PROXIMITY = new BigDecimal("0.20");
-    private static final BigDecimal WEIGHT_PRICE_MATCH = new BigDecimal("0.15");
-    private static final BigDecimal WEIGHT_FRESHNESS = new BigDecimal("0.10");
-    private static final BigDecimal WEIGHT_PREFERENCE = new BigDecimal("0.10");
-    private static final BigDecimal WEIGHT_PROJECT_AFFINITY = new BigDecimal("0.15");
+    // 默认权重配置
+    private static final BigDecimal DEFAULT_WEIGHT_TAG_SIMILARITY = new BigDecimal("0.30");
+    private static final BigDecimal DEFAULT_WEIGHT_GEO_PROXIMITY = new BigDecimal("0.20");
+    private static final BigDecimal DEFAULT_WEIGHT_PRICE_MATCH = new BigDecimal("0.15");
+    private static final BigDecimal DEFAULT_WEIGHT_FRESHNESS = new BigDecimal("0.10");
+    private static final BigDecimal DEFAULT_WEIGHT_PREFERENCE = new BigDecimal("0.10");
+    private static final BigDecimal DEFAULT_WEIGHT_PROJECT_AFFINITY = new BigDecimal("0.15");
 
-    private static final List<String> EXHIBITION_KEYWORDS = Arrays.asList("展台", "搭建", "会展", "展览", "布展", "展位", "展厅", "展馆", "巡展");
-    private static final List<String> RENOVATION_KEYWORDS = Arrays.asList("装修", "改造", "翻新", "设计", "施工", "家装", "工装", "装潢", "软装", "硬装");
-    private static final List<String> ENGINEERING_KEYWORDS = Arrays.asList("工程", "总包", "施工队", "钢结构", "机电", "土建", "建材", "脚手架", "设备租赁", "电气", "管道", "消防", "弱电", "暖通", "安装");
-    private static final List<String> STYLE_KEYWORDS = Arrays.asList("现代", "科技", "工业", "中式", "欧式", "简约", "奢华", "北欧", "复古", "工业风", "极简", "科技感");
-    private static final List<String> MATERIAL_KEYWORDS = Arrays.asList("钢结构", "桁架", "木材", "灯光", "音响", "LED", "玻璃", "铝合金", "地毯", "石材", "PVC", "喷绘", "舞台", "幕布", "地板", "龙骨", "设备");
+    private static final BigDecimal DEFAULT_MIN_SCORE = new BigDecimal("0.6");
+    private static final BigDecimal DEFAULT_GEO_FALLBACK_SCORE = new BigDecimal("0.5");
+
+    private static final String MATCHING_CONFIG_PROPERTY = "marketplace.matching.config.location";
+    private static final String MATCHING_CONFIG_DEFAULT_LOCATION = "component://moqui-marketplace/config/matching-config.json";
+    private static final long CONFIG_CACHE_TTL_MS = 5 * 60 * 1000L;
+    private static final Object CONFIG_LOCK = new Object();
+    private static Map<String, Object> cachedConfig;
+    private static long configLoadedTs = 0L;
+
+    private static final List<String> DEFAULT_EXHIBITION_KEYWORDS = Arrays.asList("展台", "搭建", "会展", "展览", "布展", "展位", "展厅", "展馆", "巡展");
+    private static final List<String> DEFAULT_RENOVATION_KEYWORDS = Arrays.asList("装修", "改造", "翻新", "设计", "施工", "家装", "工装", "装潢", "软装", "硬装");
+    private static final List<String> DEFAULT_ENGINEERING_KEYWORDS = Arrays.asList("工程", "总包", "施工队", "钢结构", "机电", "土建", "建材", "脚手架", "设备租赁", "电气", "管道", "消防", "弱电", "暖通", "安装");
+    private static final List<String> DEFAULT_STYLE_KEYWORDS = Arrays.asList("现代", "科技", "工业", "中式", "欧式", "简约", "奢华", "北欧", "复古", "工业风", "极简", "科技感");
+    private static final List<String> DEFAULT_MATERIAL_KEYWORDS = Arrays.asList("钢结构", "桁架", "木材", "灯光", "音响", "LED", "玻璃", "铝合金", "地毯", "石材", "PVC", "喷绘", "舞台", "幕布", "地板", "龙骨", "设备");
+
+    private BigDecimal weightTagSimilarity = DEFAULT_WEIGHT_TAG_SIMILARITY;
+    private BigDecimal weightGeoProximity = DEFAULT_WEIGHT_GEO_PROXIMITY;
+    private BigDecimal weightPriceMatch = DEFAULT_WEIGHT_PRICE_MATCH;
+    private BigDecimal weightFreshness = DEFAULT_WEIGHT_FRESHNESS;
+    private BigDecimal weightPreference = DEFAULT_WEIGHT_PREFERENCE;
+    private BigDecimal weightProjectAffinity = DEFAULT_WEIGHT_PROJECT_AFFINITY;
+    private BigDecimal geoFallbackScore = DEFAULT_GEO_FALLBACK_SCORE;
+
+    private List<String> exhibitionKeywords = new ArrayList<>(DEFAULT_EXHIBITION_KEYWORDS);
+    private List<String> renovationKeywords = new ArrayList<>(DEFAULT_RENOVATION_KEYWORDS);
+    private List<String> engineeringKeywords = new ArrayList<>(DEFAULT_ENGINEERING_KEYWORDS);
+    private List<String> styleKeywords = new ArrayList<>(DEFAULT_STYLE_KEYWORDS);
+    private List<String> materialKeywords = new ArrayList<>(DEFAULT_MATERIAL_KEYWORDS);
 
     public SmartMatchingEngine(ExecutionContext ec) {
         this.ec = ec;
+        loadRuntimeConfig();
+    }
+
+    public static void clearCachedConfig() {
+        synchronized (CONFIG_LOCK) {
+            cachedConfig = null;
+            configLoadedTs = 0L;
+        }
+    }
+
+    public static BigDecimal getConfiguredDefaultMinScore(ExecutionContext ec) {
+        Map<String, Object> config = getMatchingConfig(ec);
+        if (config != null) {
+            Object thresholdsObj = config.get("thresholds");
+            if (thresholdsObj instanceof Map) {
+                Object value = ((Map<?, ?>) thresholdsObj).get("defaultMinScore");
+                BigDecimal parsed = toBigDecimal(value, null);
+                if (parsed != null) return parsed;
+            }
+        }
+        return DEFAULT_MIN_SCORE;
+    }
+
+    private void loadRuntimeConfig() {
+        resetToDefaults();
+        Map<String, Object> config = getMatchingConfig(ec);
+        if (config == null) return;
+
+        Object weightsObj = config.get("weights");
+        if (weightsObj instanceof Map) {
+            Map<?, ?> weights = (Map<?, ?>) weightsObj;
+            weightTagSimilarity = toBigDecimal(weights.get("tagSimilarity"), DEFAULT_WEIGHT_TAG_SIMILARITY);
+            weightGeoProximity = toBigDecimal(weights.get("geoProximity"), DEFAULT_WEIGHT_GEO_PROXIMITY);
+            weightPriceMatch = toBigDecimal(weights.get("priceMatch"), DEFAULT_WEIGHT_PRICE_MATCH);
+            weightFreshness = toBigDecimal(weights.get("freshness"), DEFAULT_WEIGHT_FRESHNESS);
+            weightPreference = toBigDecimal(weights.get("preference"), DEFAULT_WEIGHT_PREFERENCE);
+            weightProjectAffinity = toBigDecimal(weights.get("projectAffinity"), DEFAULT_WEIGHT_PROJECT_AFFINITY);
+        }
+
+        Object thresholdsObj = config.get("thresholds");
+        if (thresholdsObj instanceof Map) {
+            Map<?, ?> thresholds = (Map<?, ?>) thresholdsObj;
+            geoFallbackScore = toBigDecimal(thresholds.get("geoFallbackScore"), DEFAULT_GEO_FALLBACK_SCORE);
+        }
+
+        Object keywordsObj = config.get("keywords");
+        if (keywordsObj instanceof Map) {
+            Map<?, ?> keywords = (Map<?, ?>) keywordsObj;
+            exhibitionKeywords = toStringList(keywords.get("exhibition"), DEFAULT_EXHIBITION_KEYWORDS);
+            renovationKeywords = toStringList(keywords.get("renovation"), DEFAULT_RENOVATION_KEYWORDS);
+            engineeringKeywords = toStringList(keywords.get("engineering"), DEFAULT_ENGINEERING_KEYWORDS);
+            styleKeywords = toStringList(keywords.get("style"), DEFAULT_STYLE_KEYWORDS);
+            materialKeywords = toStringList(keywords.get("material"), DEFAULT_MATERIAL_KEYWORDS);
+        }
+    }
+
+    private void resetToDefaults() {
+        weightTagSimilarity = DEFAULT_WEIGHT_TAG_SIMILARITY;
+        weightGeoProximity = DEFAULT_WEIGHT_GEO_PROXIMITY;
+        weightPriceMatch = DEFAULT_WEIGHT_PRICE_MATCH;
+        weightFreshness = DEFAULT_WEIGHT_FRESHNESS;
+        weightPreference = DEFAULT_WEIGHT_PREFERENCE;
+        weightProjectAffinity = DEFAULT_WEIGHT_PROJECT_AFFINITY;
+        geoFallbackScore = DEFAULT_GEO_FALLBACK_SCORE;
+
+        exhibitionKeywords = new ArrayList<>(DEFAULT_EXHIBITION_KEYWORDS);
+        renovationKeywords = new ArrayList<>(DEFAULT_RENOVATION_KEYWORDS);
+        engineeringKeywords = new ArrayList<>(DEFAULT_ENGINEERING_KEYWORDS);
+        styleKeywords = new ArrayList<>(DEFAULT_STYLE_KEYWORDS);
+        materialKeywords = new ArrayList<>(DEFAULT_MATERIAL_KEYWORDS);
+    }
+
+    private static Map<String, Object> getMatchingConfig(ExecutionContext ec) {
+        long now = System.currentTimeMillis();
+        synchronized (CONFIG_LOCK) {
+            if (cachedConfig != null && (now - configLoadedTs) < CONFIG_CACHE_TTL_MS) {
+                return cachedConfig;
+            }
+            String location = System.getProperty(MATCHING_CONFIG_PROPERTY);
+            if (location == null || location.isEmpty()) {
+                String envKey = MATCHING_CONFIG_PROPERTY.toUpperCase().replace('.', '_');
+                location = System.getenv(envKey);
+            }
+            if (location == null || location.isEmpty()) {
+                location = MATCHING_CONFIG_DEFAULT_LOCATION;
+            }
+            try {
+                String configText = ec.getResource().getLocationText(location, false);
+                if (configText != null && !configText.trim().isEmpty()) {
+                    Object parsed = new JsonSlurper().parseText(configText);
+                    if (parsed instanceof Map) {
+                        cachedConfig = (Map<String, Object>) parsed;
+                        configLoadedTs = now;
+                        return cachedConfig;
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Unable to load matching config from {}: {}", location, e.getMessage());
+            }
+            cachedConfig = null;
+            configLoadedTs = now;
+            return null;
+        }
+    }
+
+    private static BigDecimal toBigDecimal(Object value, BigDecimal defaultValue) {
+        if (value == null) return defaultValue;
+        if (value instanceof BigDecimal) return (BigDecimal) value;
+        try {
+            return new BigDecimal(value.toString());
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    private static List<String> toStringList(Object value, List<String> defaults) {
+        if (value instanceof Collection) {
+            List<String> result = new ArrayList<>();
+            for (Object obj : (Collection<?>) value) {
+                if (obj != null) {
+                    String str = obj.toString().trim();
+                    if (!str.isEmpty()) result.add(str);
+                }
+            }
+            if (!result.isEmpty()) return result;
+        }
+        return new ArrayList<>(defaults);
     }
 
     /**
@@ -151,12 +302,12 @@ public class SmartMatchingEngine {
             BigDecimal projectAffinity = calculateProjectAffinity(effectiveProfile1, effectiveProfile2);
 
             // 6. 加权计算总分
-            BigDecimal totalScore = tagSimilarity.multiply(WEIGHT_TAG_SIMILARITY)
-                    .add(geoProximity.multiply(WEIGHT_GEO_PROXIMITY))
-                    .add(priceMatch.multiply(WEIGHT_PRICE_MATCH))
-                    .add(freshnessScore.multiply(WEIGHT_FRESHNESS))
-                    .add(preferenceScore.multiply(WEIGHT_PREFERENCE))
-                    .add(projectAffinity.multiply(WEIGHT_PROJECT_AFFINITY));
+            BigDecimal totalScore = tagSimilarity.multiply(weightTagSimilarity)
+                    .add(geoProximity.multiply(weightGeoProximity))
+                    .add(priceMatch.multiply(weightPriceMatch))
+                    .add(freshnessScore.multiply(weightFreshness))
+                    .add(preferenceScore.multiply(weightPreference))
+                    .add(projectAffinity.multiply(weightProjectAffinity));
 
             result.put("matchScore", totalScore.setScale(4, RoundingMode.HALF_UP));
             result.put("tagSimilarity", tagSimilarity);
@@ -221,7 +372,7 @@ public class SmartMatchingEngine {
      */
     private BigDecimal calculateGeoProximity(String geoPointId1, String geoPointId2, BigDecimal deliveryRange) {
         if (geoPointId1 == null || geoPointId2 == null) {
-            return new BigDecimal("0.5"); // 缺少位置信息时给中等分数
+            return geoFallbackScore; // 缺少位置信息时给中等分数
         }
 
         try {
@@ -234,7 +385,7 @@ public class SmartMatchingEngine {
                     .one();
 
             if (geo1 == null || geo2 == null) {
-                return new BigDecimal("0.5");
+                return geoFallbackScore;
             }
 
             double lat1 = geo1.getBigDecimal("latitude").doubleValue();
@@ -261,7 +412,7 @@ public class SmartMatchingEngine {
 
         } catch (Exception e) {
             logger.warn("Error calculating geo proximity", e);
-            return new BigDecimal("0.5");
+            return geoFallbackScore;
         }
     }
 
@@ -433,9 +584,9 @@ public class SmartMatchingEngine {
 
         profile.keywords.addAll(extractChineseTokens(rawText));
 
-        int exhibitionCount = countKeywordMatches(rawText, EXHIBITION_KEYWORDS);
-        int renovationCount = countKeywordMatches(rawText, RENOVATION_KEYWORDS);
-        int engineeringCount = countKeywordMatches(rawText, ENGINEERING_KEYWORDS);
+        int exhibitionCount = countKeywordMatches(rawText, exhibitionKeywords);
+        int renovationCount = countKeywordMatches(rawText, renovationKeywords);
+        int engineeringCount = countKeywordMatches(rawText, engineeringKeywords);
 
         if (exhibitionCount >= renovationCount && exhibitionCount >= engineeringCount && exhibitionCount > 0) {
             profile.projectType = "EXHIBITION_SETUP";
@@ -481,7 +632,7 @@ public class SmartMatchingEngine {
             }
         }
 
-        for (String style : STYLE_KEYWORDS) {
+        for (String style : styleKeywords) {
             if (rawText.contains(style)) {
                 profile.styleTags.add(style);
             }
@@ -493,7 +644,7 @@ public class SmartMatchingEngine {
             }
         }
 
-        for (String material : MATERIAL_KEYWORDS) {
+        for (String material : materialKeywords) {
             if (rawText.contains(material)) {
                 profile.materialTags.add(material);
             }

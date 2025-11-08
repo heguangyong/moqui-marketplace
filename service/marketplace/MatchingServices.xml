@@ -7,7 +7,7 @@
         <in-parameters>
             <parameter name="listingId" required="true"/>
             <parameter name="maxResults" type="Integer" default="10"/>
-            <parameter name="minScore" type="BigDecimal" default="0.6"/>
+            <parameter name="minScore" type="BigDecimal"/>
             <parameter name="autoNotify" type="Boolean" default="false"/>
         </in-parameters>
         <out-parameters>
@@ -18,8 +18,14 @@
                 import org.moqui.marketplace.matching.SmartMatchingEngine
                 import java.math.BigDecimal
 
-                BigDecimal threshold = (minScore instanceof BigDecimal) ? (BigDecimal) minScore :
-                        new BigDecimal(minScore ?: "0.6")
+                BigDecimal threshold
+                if (minScore instanceof BigDecimal) {
+                    threshold = (BigDecimal) minScore
+                } else if (minScore != null) {
+                    threshold = new BigDecimal(minScore.toString())
+                } else {
+                    threshold = SmartMatchingEngine.getConfiguredDefaultMinScore(ec)
+                }
                 Integer limit = (maxResults ?: 10) as Integer
 
                 def engine = new SmartMatchingEngine(ec)
@@ -217,6 +223,16 @@
 
                 contactInfo = contactInfoMap
                 notified = notifiedFlag
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="reload" noun="MatchingConfig" authenticate="true">
+        <description>清除智能匹配引擎的配置缓存并重新加载权重/关键词</description>
+        <actions>
+            <script><![CDATA[
+                import org.moqui.marketplace.matching.SmartMatchingEngine
+                SmartMatchingEngine.clearCachedConfig()
             ]]></script>
         </actions>
     </service>

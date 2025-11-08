@@ -236,7 +236,7 @@ moqui-marketplace/
 ├── component.xml                 ✅ 组件定义
 ├── build.gradle                  ✅ 构建配置
 ├── entity/MarketplaceEntities.xml ✅ 8个核心实体
-├── service/MarketplaceServices.xml ✅ 20+业务服务
+├── service/marketplace/MarketplaceServices.xml ✅ 20+业务服务
 ├── data/MarketplaceSeedData.xml   ✅ 标签体系数据
 ├── data/MarketplaceDemoData.xml   ✅ 演示数据
 └── src/main/java/.../SmartMatchingEngine.java ✅ 匹配算法

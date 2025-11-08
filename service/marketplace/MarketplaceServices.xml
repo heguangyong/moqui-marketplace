@@ -301,7 +301,7 @@
         </out-parameters>
         <actions>
             <script><![CDATA[
-                def find = ec.entity.makeFind("marketplace.listing.Listing")
+                def find = ec.entity.find("marketplace.listing.Listing")
                 if (listingType) find.condition("listingType", listingType)
                 if (category) find.condition("category", category)
                 if (subCategory) find.condition("subCategory", subCategory)
@@ -320,7 +320,7 @@
                 def results = find.list()
                 context.listings = results
 
-                def countFind = ec.entity.makeFind("marketplace.listing.Listing")
+                def countFind = ec.entity.find("marketplace.listing.Listing")
                 if (listingType) countFind.condition("listingType", listingType)
                 if (category) countFind.condition("category", category)
                 if (subCategory) countFind.condition("subCategory", subCategory)
@@ -551,7 +551,7 @@
         </out-parameters>
         <actions>
             <script><![CDATA[
-                def find = ec.entity.makeFind("marketplace.order.MatchOrder")
+                def find = ec.entity.find("marketplace.order.MatchOrder")
                 if (sellerId) find.condition("sellerId", sellerId)
                 if (buyerId) find.condition("buyerId", buyerId)
                 if (status) find.condition("status", status)
@@ -564,7 +564,7 @@
                 find.orderBy("-confirmedDate")
                 orders = find.list()
 
-                def countFind = ec.entity.makeFind("marketplace.order.MatchOrder")
+                def countFind = ec.entity.find("marketplace.order.MatchOrder")
                 if (sellerId) countFind.condition("sellerId", sellerId)
                 if (buyerId) countFind.condition("buyerId", buyerId)
                 if (status) countFind.condition("status", status)
@@ -719,7 +719,7 @@
         </out-parameters>
         <actions>
             <script><![CDATA[
-                def find = ec.entity.makeFind("marketplace.tag.Tag")
+                def find = ec.entity.find("marketplace.tag.Tag")
                 def cf = ec.entity.conditionFactory
                 if (tagType) find.condition("tagType", tagType)
                 if (parentTagId) find.condition("parentTagId", parentTagId)
@@ -888,7 +888,7 @@
                 import java.math.BigDecimal
                 import java.math.RoundingMode
 
-                def matchFind = ec.entity.makeFind("marketplace.match.Match")
+                def matchFind = ec.entity.find("marketplace.match.Match")
 
                 def cf = ec.entity.conditionFactory
 
@@ -2000,7 +2000,7 @@
         </out-parameters>
         <actions>
             <script><![CDATA[
-                def find = ec.entity.makeFind("marketplace.ecommerce.EcommerceProduct")
+                def find = ec.entity.find("marketplace.ecommerce.EcommerceProduct")
                 if (productCategoryId) find.condition("productCategoryId", productCategoryId)
                 if (status) find.condition("status", status)
                 int max = (limit ?: 20) as int
@@ -2020,7 +2020,7 @@
         </out-parameters>
         <actions>
             <script><![CDATA[
-                def find = ec.entity.makeFind("marketplace.ecommerce.EcommerceProduct")
+                def find = ec.entity.find("marketplace.ecommerce.EcommerceProduct")
                         .condition("status", "ACTIVE")
                         .orderBy("-lastUpdatedDate")
                         .limit((limit ?: 5) as int)

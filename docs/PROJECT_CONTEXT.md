@@ -875,7 +875,7 @@ public String generateMatchReason(...) {
 
 **关键文件**:
 - 数据模型: `entity/MarketplaceEntities.xml`
-- 服务定义: `service/MarketplaceServices.xml`
+- 服务定义: `service/marketplace/MarketplaceServices.xml`
 - 匹配算法: `src/main/java/.../SmartMatchingEngine.java`
 - 集成指南: `docs/MCP_INTEGRATION_GUIDE.md`
 

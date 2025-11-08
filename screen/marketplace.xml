@@ -2,7 +2,7 @@
 <screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
         default-menu-title="智能推荐" default-menu-index="1"
-        include-child-content="true" require-authentication="false"
+        include-child-content="false" require-authentication="false"
         menu-image="fa fa-chart-line" menu-image-type="icon">
 
     <subscreens default-item="Dashboard">
@@ -32,6 +32,10 @@
     </subscreens>
 
     <widgets>
-        <subscreens-panel id="marketplace-panel" type="tab"/>
+        <container style="margin-bottom:16px;">
+            <link url="Dashboard" text="控制台" btn-type="primary" btn-size="sm"/>
+            <link url="SystemConfig" text="系统配置" btn-type="default" btn-size="sm" style="margin-left:8px;"/>
+        </container>
+        <subscreens-active/>
     </widgets>
 </screen>

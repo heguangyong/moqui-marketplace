@@ -3,6 +3,6 @@
     "location": "component://moqui-marketplace/service/marketplace.xml"
   },
   "hivemindWebhook": {
-    "location": "component://moqui-marketplace/service/HiveMindWebhookServices.xml"
+    "location": "component://moqui-marketplace/service/marketplace/HiveMindWebhookServices.xml"
   }
 }

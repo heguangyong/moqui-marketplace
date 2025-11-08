@@ -4,6 +4,7 @@
         default-menu-title="供应管理"
         include-child-content="true" require-authentication="false">
 
+    <parameter name="listingId"/>
     <parameter name="supplyListingId"/>
     <parameter name="merchantId"/>
 

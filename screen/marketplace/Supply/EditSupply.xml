@@ -3,22 +3,30 @@
         xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
         default-menu-title="编辑供应">
 
-    <parameter name="supplyListingId" required="true"/>
+    <parameter name="listingId"/>
+    <parameter name="supplyListingId"/>
     <parameter name="merchantId"/>
 
     <actions>
         <if condition="!merchantId">
             <set field="merchantId" from="ec.user.userAccount?.partyId ?: 'DEMO_MERCHANT'"/>
         </if>
+        <if condition="!listingId && supplyListingId">
+            <set field="listingId" from="supplyListingId"/>
+        </if>
+        <if condition="!listingId">
+            <return error="true" message="缺少listingId"/>
+        </if>
 
         <!-- 获取供应信息 -->
-        <entity-find-one entity-name="marketplace.SupplyListing" value-field="supplyListing">
-            <field-map field-name="supplyListingId" from="supplyListingId"/>
+        <entity-find-one entity-name="marketplace.listing.Listing" value-field="supplyListing">
+            <field-map field-name="listingId" from="listingId"/>
         </entity-find-one>
 
         <if condition="!supplyListing">
             <return error="true" message="供应信息不存在"/>
         </if>
+        <set field="supplyListingId" from="listingId"/>
     </actions>
 
     <widgets>
@@ -28,6 +36,7 @@
                     <label text="编辑供应信息" type="h2"/>
 
                     <form-single name="EditSupplyForm" transition="../updateSupply" map="supplyListing">
+                        <field name="listingId"><default-field><hidden/></default-field></field>
                         <field name="supplyListingId"><default-field><hidden/></default-field></field>
                         <field name="merchantId"><default-field><hidden/></default-field></field>
 
