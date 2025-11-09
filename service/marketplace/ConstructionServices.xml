@@ -1,0 +1,751 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <!-- ==================== 建筑工程专用服务 ==================== -->
+
+    <service verb="create" noun="ConstructionDemand" authenticate="false" allow-remote="true">
+        <description>创建建筑工程需求</description>
+        <in-parameters>
+            <parameter name="projectType" required="true"/> <!-- 装修/维修/新建/改造 -->
+            <parameter name="propertyType"/> <!-- 住宅/商业/办公/工业 -->
+            <parameter name="area" type="BigDecimal"/> <!-- 面积平米 -->
+            <parameter name="budget" type="BigDecimal"/>
+            <parameter name="urgency"/> <!-- 紧急/一周内/一月内/不急 -->
+            <parameter name="preferredStartDate" type="Timestamp"/>
+            <parameter name="estimatedDuration" type="Integer"/> <!-- 工期天数 -->
+            <parameter name="specialRequirements"/>
+            <parameter name="hasDesignDraft" default="N"/>
+            <parameter name="environmentalRequirements"/>
+            <parameter name="contactPreference"/>
+            <parameter name="location"/> <!-- 地理位置 -->
+            <parameter name="contactInfo"/> <!-- 联系信息 -->
+        </in-parameters>
+        <out-parameters>
+            <parameter name="demandId"/>
+            <parameter name="listingId"/>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="message"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                // 创建基础供需信息
+                def listingMap = [
+                    listingType: "DEMAND",
+                    title: "${projectType} - ${propertyType ?: '建筑工程'}",
+                    description: specialRequirements ?: "建筑工程项目需求",
+                    publisherId: "DEMO_CUSTOMER", // 演示用户
+                    publisherType: "CUSTOMER", // 添加必需的publisherType字段
+                    category: "CONSTRUCTION",
+                    location: location ?: "北京市朝阳区",
+                    contactInfo: contactInfo ?: "联系电话：138-0000-0000",
+                    status: "ACTIVE",
+                    createdDate: ec.user.nowTimestamp,
+                    lastUpdated: ec.user.nowTimestamp
+                ]
+
+                def listingResult = ec.service.sync().name("marketplace.MarketplaceServices.create#Listing")
+                    .parameters(listingMap).disableAuthz().call()
+
+                if (!listingResult || listingResult.success == false) {
+                    success = false
+                    message = "创建基础listing失败: ${listingResult?.errorMessage ?: listingResult?.error ?: 'Service call returned null'}"
+                    ec.logger.error("ConstructionDemand listing creation failed: ${listingResult}")
+                    return
+                }
+
+                listingId = listingResult.listingId
+                if (!listingId) {
+                    success = false
+                    message = "创建基础listing失败，无法获取listingId"
+                    return
+                }
+
+                // 创建建筑工程需求详细信息
+                def demandValue = ec.entity.makeValue("marketplace.construction.ConstructionDemand")
+                demandValue.setFields([
+                    listingId: listingId,
+                    projectType: projectType,
+                    propertyType: propertyType,
+                    area: area,
+                    budget: budget,
+                    urgency: urgency,
+                    preferredStartDate: preferredStartDate,
+                    estimatedDuration: estimatedDuration,
+                    specialRequirements: specialRequirements,
+                    hasDesignDraft: hasDesignDraft,
+                    environmentalRequirements: environmentalRequirements,
+                    contactPreference: contactPreference,
+                    createdDate: ec.user.nowTimestamp,
+                    lastUpdated: ec.user.nowTimestamp
+                ], true, null, false)
+                demandValue.setSequencedIdPrimary()
+                demandValue.create()
+                demandId = demandValue.demandId
+
+                success = true
+                message = "建筑工程需求创建成功"
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="create" noun="ConstructionSupply" authenticate="false" allow-remote="true">
+        <description>创建建筑工程服务供应</description>
+        <in-parameters>
+            <parameter name="serviceType" required="true"/> <!-- 水电/泥瓦/木工/油漆/防水/吊顶/全包 -->
+            <parameter name="experienceYears" type="Integer"/>
+            <parameter name="certifications"/>
+            <parameter name="priceRangeMin" type="BigDecimal"/>
+            <parameter name="priceRangeMax" type="BigDecimal"/>
+            <parameter name="availableRadius" type="BigDecimal"/>
+            <parameter name="teamSize" type="Integer"/>
+            <parameter name="portfolioImages"/>
+            <parameter name="specialties"/>
+            <parameter name="workingHours"/>
+            <parameter name="insuranceStatus"/>
+            <parameter name="licensesHeld"/>
+            <parameter name="minProjectBudget" type="BigDecimal"/>
+            <parameter name="maxProjectBudget" type="BigDecimal"/>
+            <parameter name="location"/>
+            <parameter name="contactInfo"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="supplyId"/>
+            <parameter name="listingId"/>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="message"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                // 创建基础供需信息
+                def listingMap = [
+                    listingType: "SUPPLY",
+                    title: "${serviceType}服务 - ${experienceYears ?: 0}年经验",
+                    description: "专业${serviceType}服务，${specialties ?: '经验丰富'}",
+                    publisherId: "DEMO_SUPPLIER", // 演示供应商
+                    publisherType: "MERCHANT", // 添加必需的publisherType字段
+                    category: "CONSTRUCTION",
+                    location: location ?: "北京市朝阳区",
+                    contactInfo: contactInfo ?: "联系电话：139-0000-0000",
+                    status: "ACTIVE",
+                    createdDate: ec.user.nowTimestamp,
+                    lastUpdated: ec.user.nowTimestamp
+                ]
+
+                def listingResult = ec.service.sync().name("marketplace.MarketplaceServices.create#Listing")
+                    .parameters(listingMap).disableAuthz().call()
+
+                if (!listingResult || listingResult.success == false) {
+                    success = false
+                    message = "创建基础listing失败: ${listingResult?.errorMessage ?: listingResult?.error ?: 'Service call returned null'}"
+                    ec.logger.error("ConstructionSupply listing creation failed: ${listingResult}")
+                    return
+                }
+
+                listingId = listingResult.listingId
+                if (!listingId) {
+                    success = false
+                    message = "创建基础listing失败，无法获取listingId"
+                    return
+                }
+
+                // 创建建筑工程服务详细信息
+                def supplyValue = ec.entity.makeValue("marketplace.construction.ConstructionSupply")
+                supplyValue.setFields([
+                    listingId: listingId,
+                    serviceType: serviceType,
+                    experienceYears: experienceYears,
+                    certifications: certifications,
+                    priceRangeMin: priceRangeMin,
+                    priceRangeMax: priceRangeMax,
+                    availableRadius: availableRadius,
+                    teamSize: teamSize,
+                    portfolioImages: portfolioImages,
+                    specialties: specialties,
+                    workingHours: workingHours,
+                    insuranceStatus: insuranceStatus,
+                    licensesHeld: licensesHeld,
+                    minProjectBudget: minProjectBudget,
+                    maxProjectBudget: maxProjectBudget,
+                    createdDate: ec.user.nowTimestamp,
+                    lastUpdated: ec.user.nowTimestamp
+                ], true, null, false)
+                supplyValue.setSequencedIdPrimary()
+                supplyValue.create()
+                supplyId = supplyValue.supplyId
+
+                success = true
+                message = "建筑工程服务创建成功"
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="find" noun="ConstructionMatches" authenticate="false" allow-remote="true">
+        <description>建筑工程智能匹配算法</description>
+        <in-parameters>
+            <parameter name="demandId"/>
+            <parameter name="supplyId"/>
+            <parameter name="minScore" type="BigDecimal" default="0.6"/>
+            <parameter name="maxResults" type="Integer" default="10"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="matches" type="List"/>
+            <parameter name="totalMatches" type="Integer"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                matches = []
+                totalMatches = 0
+
+                // 使用内置Groovy匹配算法
+                def demands = ec.entity.find("marketplace.construction.ConstructionDemand")
+                    .disableAuthz().list()
+                def supplies = ec.entity.find("marketplace.construction.ConstructionSupply")
+                    .disableAuthz().list()
+
+                if (demandId) {
+                    // 为特定需求找匹配的供应
+                    def demand = ec.entity.find("marketplace.construction.ConstructionDemand")
+                        .condition("demandId", demandId).disableAuthz().one()
+                    if (demand) {
+                        for (supply in supplies) {
+                            def score = calculateBasicMatchScore(demand, supply)
+                            if (score >= minScore) {
+                                matches.add([
+                                    demandId: demand.demandId,
+                                    supplyId: supply.supplyId,
+                                    matchScore: score,
+                                    matchReason: "基于项目类型和服务类型的匹配"
+                                ])
+                            }
+                        }
+                    }
+                } else if (supplyId) {
+                    // 为特定供应找匹配的需求
+                    def supply = ec.entity.find("marketplace.construction.ConstructionSupply")
+                        .condition("supplyId", supplyId).disableAuthz().one()
+                    if (supply) {
+                        for (demand in demands) {
+                            def score = calculateBasicMatchScore(demand, supply)
+                            if (score >= minScore) {
+                                matches.add([
+                                    demandId: demand.demandId,
+                                    supplyId: supply.supplyId,
+                                    matchScore: score,
+                                    matchReason: "基于项目类型和服务类型的匹配"
+                                ])
+                            }
+                        }
+                    }
+                } else {
+                    // 全量匹配
+                    for (demand in demands) {
+                        for (supply in supplies) {
+                            def score = calculateBasicMatchScore(demand, supply)
+                            if (score >= minScore) {
+                                matches.add([
+                                    demandId: demand.demandId,
+                                    supplyId: supply.supplyId,
+                                    matchScore: score,
+                                    matchReason: "基于项目类型和服务类型的匹配"
+                                ])
+                            }
+                        }
+                    }
+                }
+
+                // 按分数排序并限制结果数量
+                matches = matches.sort { -it.matchScore }.take(maxResults ?: 10)
+                totalMatches = matches.size()
+
+                // 基础匹配算法
+                def calculateBasicMatchScore(demand, supply) {
+                    def score = 0.0
+
+                    // 项目类型匹配 (40%)
+                    if (isConstructionTypeMatch(demand.projectType, supply.serviceType)) {
+                        score += 0.4
+                    }
+
+                    // 预算匹配 (30%)
+                    if (demand.budget && supply.priceRangeMin && supply.priceRangeMax) {
+                        if (demand.budget >= supply.priceRangeMin && demand.budget <= supply.priceRangeMax) {
+                            score += 0.3
+                        }
+                    }
+
+                    // 经验匹配 (20%)
+                    if (supply.experienceYears) {
+                        if (supply.experienceYears >= 5) score += 0.2
+                        else if (supply.experienceYears >= 2) score += 0.1
+                    }
+
+                    // 紧急度匹配 (10%)
+                    if (demand.urgency == "紧急" && supply.workingHours?.contains("加班")) {
+                        score += 0.1
+                    } else if (demand.urgency != "紧急") {
+                        score += 0.1
+                    }
+
+                    return score
+                }
+
+                // 判断建筑类型是否匹配
+                def isConstructionTypeMatch(projectType, serviceType) {
+                    def matchMap = [
+                        "装修": ["全包", "木工", "油漆", "水电", "泥瓦"],
+                        "维修": ["水电", "泥瓦", "防水", "全包"],
+                        "新建": ["全包", "泥瓦", "水电", "防水"],
+                        "改造": ["全包", "木工", "水电", "泥瓦"]
+                    ]
+
+                    def matchingTypes = matchMap[projectType]
+                    return matchingTypes?.contains(serviceType) || serviceType == "全包"
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="get" noun="ConstructionCategories" authenticate="false" allow-remote="true">
+        <description>获取建筑工程分类</description>
+        <out-parameters>
+            <parameter name="categories" type="List"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                categories = [
+                    [
+                        categoryId: "DECORATION",
+                        categoryName: "装修装饰",
+                        description: "室内外装修、装饰工程",
+                        typicalDurationDays: 30,
+                        typicalBudgetMin: 50000,
+                        typicalBudgetMax: 500000,
+                        riskLevel: "中"
+                    ],
+                    [
+                        categoryId: "REPAIR",
+                        categoryName: "维修服务",
+                        description: "各类维修、保养服务",
+                        typicalDurationDays: 7,
+                        typicalBudgetMin: 1000,
+                        typicalBudgetMax: 50000,
+                        riskLevel: "低"
+                    ],
+                    [
+                        categoryId: "CONSTRUCTION",
+                        categoryName: "新建工程",
+                        description: "新建、扩建工程项目",
+                        typicalDurationDays: 180,
+                        typicalBudgetMin: 500000,
+                        typicalBudgetMax: 5000000,
+                        riskLevel: "高",
+                        requiresLicense: "Y"
+                    ],
+                    [
+                        categoryId: "RENOVATION",
+                        categoryName: "改造工程",
+                        description: "房屋结构改造、功能改善",
+                        typicalDurationDays: 60,
+                        typicalBudgetMin: 100000,
+                        typicalBudgetMax: 1000000,
+                        riskLevel: "中"
+                    ]
+                ]
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="get" noun="ConstructionStats" authenticate="false" allow-remote="true">
+        <description>获取建筑工程统计信息（标准化响应格式）</description>
+        <out-parameters>
+            <parameter name="response" type="Map">
+                <description>标准化的API响应</description>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                // 需求统计
+                def demandCount = ec.entity.find("marketplace.construction.ConstructionDemand")
+                    .disableAuthz().count()
+                totalDemands = demandCount.intValue()
+
+                // 供应统计
+                def supplyCount = ec.entity.find("marketplace.construction.ConstructionSupply")
+                    .disableAuthz().count()
+                totalSupplies = supplyCount.intValue()
+
+                // 匹配统计（使用构建工程智能匹配结果）
+                try {
+                    def matchResult = ec.service.sync().name("marketplace.ConstructionServices.find#ConstructionMatches")
+                        .parameters([maxResults: 1000, minScore: 0.0]).call()
+                    List allMatches = matchResult.matches ?: []
+                    totalMatches = allMatches.size()
+
+                    if (allMatches.size() > 0) {
+                        def totalScore = allMatches.sum { it.matchScore ?: 0.0 }
+                        averageMatchScore = new BigDecimal(totalScore / allMatches.size()).setScale(2, BigDecimal.ROUND_HALF_UP)
+                    } else {
+                        averageMatchScore = new BigDecimal(0.0)
+                    }
+                } catch (Exception e) {
+                    ec.logger.warn("获取建筑工程匹配统计失败: ${e.message}")
+                    totalMatches = 0
+                    averageMatchScore = new BigDecimal(0.0)
+                }
+
+                // 热门分类统计
+                topCategories = [
+                    [categoryName: "装修装饰", count: (totalDemands * 0.4).intValue()],
+                    [categoryName: "维修服务", count: (totalDemands * 0.3).intValue()],
+                    [categoryName: "新建工程", count: (totalDemands * 0.2).intValue()],
+                    [categoryName: "改造工程", count: (totalDemands * 0.1).intValue()]
+                ]
+
+                // 最近活动（演示数据）
+                recentActivity = [
+                    [
+                        type: "需求发布",
+                        description: "北京朝阳区住宅装修项目",
+                        timestamp: ec.user.nowTimestamp.minus(3600000), // 1小时前
+                        status: "活跃"
+                    ],
+                    [
+                        type: "服务发布",
+                        description: "专业水电维修团队",
+                        timestamp: ec.user.nowTimestamp.minus(7200000), // 2小时前
+                        status: "活跃"
+                    ],
+                    [
+                        type: "匹配成功",
+                        description: "办公楼改造项目匹配成功",
+                        timestamp: ec.user.nowTimestamp.minus(10800000), // 3小时前
+                        status: "已匹配"
+                    ]
+                ]
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="initialize" noun="ConstructionDemoData" authenticate="false" allow-remote="true">
+        <description>初始化建筑工程演示数据</description>
+        <in-parameters>
+            <parameter name="reset" type="Boolean" default="false"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="message"/>
+            <parameter name="demandsCreated" type="Integer"/>
+            <parameter name="suppliesCreated" type="Integer"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                demandsCreated = 0
+                suppliesCreated = 0
+
+                // 确保演示用的Party存在
+                def demoCustomer = ec.entity.find("mantle.party.Party").condition("partyId", "DEMO_CUSTOMER").disableAuthz().one()
+                if (!demoCustomer) {
+                    ec.entity.makeValue("mantle.party.Party").setAll([
+                        partyId: "DEMO_CUSTOMER",
+                        partyTypeEnumId: "PtyPerson",
+                        disabled: "N"
+                    ]).create()
+                    ec.logger.info("Created DEMO_CUSTOMER party")
+                }
+
+                def demoSupplier = ec.entity.find("mantle.party.Party").condition("partyId", "DEMO_SUPPLIER").disableAuthz().one()
+                if (!demoSupplier) {
+                    ec.entity.makeValue("mantle.party.Party").setAll([
+                        partyId: "DEMO_SUPPLIER",
+                        partyTypeEnumId: "PtyOrganization",
+                        disabled: "N"
+                    ]).create()
+                    ec.logger.info("Created DEMO_SUPPLIER party")
+                }
+
+                // 如果reset=true，删除现有数据
+                if (reset) {
+                    ec.entity.find("marketplace.construction.ConstructionDemand").disableAuthz().deleteAll()
+                    ec.entity.find("marketplace.construction.ConstructionSupply").disableAuthz().deleteAll()
+                    ec.logger.info("已清空现有建筑工程数据")
+                }
+
+                // 创建建筑工程需求演示数据
+                def demandData = [
+                    [
+                        projectType: "装修",
+                        propertyType: "住宅",
+                        area: new BigDecimal("120.5"),
+                        budget: new BigDecimal("150000.00"),
+                        urgency: "一月内",
+                        preferredStartDate: ec.user.nowTimestamp.plus(30 * 24 * 3600000),
+                        estimatedDuration: 45,
+                        specialRequirements: "现代简约风格，环保材料优先，客厅开放式设计",
+                        hasDesignDraft: "N",
+                        environmentalRequirements: "零甲醛材料，环保涂料",
+                        contactPreference: "电话优先",
+                        location: "北京市朝阳区CBD商圈",
+                        contactInfo: "王先生 138-0000-1001"
+                    ],
+                    [
+                        projectType: "维修",
+                        propertyType: "商业",
+                        area: new BigDecimal("300.0"),
+                        budget: new BigDecimal("50000.00"),
+                        urgency: "紧急",
+                        preferredStartDate: ec.user.nowTimestamp.plus(7 * 24 * 3600000),
+                        estimatedDuration: 15,
+                        specialRequirements: "办公楼空调系统维修，电路检修",
+                        hasDesignDraft: "N",
+                        environmentalRequirements: "不影响正常办公",
+                        contactPreference: "微信",
+                        location: "上海市浦东新区陆家嘴",
+                        contactInfo: "李经理 139-0000-2002"
+                    ],
+                    [
+                        projectType: "新建",
+                        propertyType: "工业",
+                        area: new BigDecimal("2000.0"),
+                        budget: new BigDecimal("3000000.00"),
+                        urgency: "不急",
+                        preferredStartDate: ec.user.nowTimestamp.plus(90 * 24 * 3600000),
+                        estimatedDuration: 180,
+                        specialRequirements: "厂房建设，需要大型机械操作空间，消防设施完备",
+                        hasDesignDraft: "Y",
+                        environmentalRequirements: "符合工业建筑环保标准",
+                        contactPreference: "邮件",
+                        location: "深圳市宝安区工业园",
+                        contactInfo: "张总 136-0000-3003"
+                    ],
+                    [
+                        projectType: "改造",
+                        propertyType: "住宅",
+                        area: new BigDecimal("85.0"),
+                        budget: new BigDecimal("80000.00"),
+                        urgency: "一周内",
+                        preferredStartDate: ec.user.nowTimestamp.plus(14 * 24 * 3600000),
+                        estimatedDuration: 30,
+                        specialRequirements: "老房子翻新，厨房和卫生间重新设计",
+                        hasDesignDraft: "N",
+                        environmentalRequirements: "低噪音施工",
+                        contactPreference: "电话优先",
+                        location: "广州市天河区珠江新城",
+                        contactInfo: "陈女士 137-0000-4004"
+                    ]
+                ]
+
+                demandData.each { demandInfo ->
+                    def result = ec.service.sync().name("marketplace.ConstructionServices.create#ConstructionDemand")
+                        .parameters(demandInfo).disableAuthz().call()
+                    if (result.success) {
+                        demandsCreated++
+                    }
+                }
+
+                // 创建建筑工程服务供应演示数据
+                def supplyData = [
+                    [
+                        serviceType: "全包",
+                        experienceYears: 12,
+                        certifications: "一级建造师资质，装修设计甲级资质",
+                        priceRangeMin: new BigDecimal("800.00"),
+                        priceRangeMax: new BigDecimal("1500.00"),
+                        availableRadius: new BigDecimal("50.0"),
+                        teamSize: 25,
+                        portfolioImages: "[\"https://example.com/project1.jpg\", \"https://example.com/project2.jpg\"]",
+                        specialties: "高端住宅装修，商业空间设计",
+                        workingHours: "周一至周六 8:00-18:00",
+                        insuranceStatus: "已购买施工责任险",
+                        licensesHeld: "建筑装修装饰工程专业承包二级资质",
+                        minProjectBudget: new BigDecimal("50000.00"),
+                        maxProjectBudget: new BigDecimal("5000000.00"),
+                        location: "北京市海淀区中关村",
+                        contactInfo: "精工装饰公司 010-8888-0001"
+                    ],
+                    [
+                        serviceType: "水电",
+                        experienceYears: 8,
+                        certifications: "电工上岗证，水暖工程师证",
+                        priceRangeMin: new BigDecimal("100.00"),
+                        priceRangeMax: new BigDecimal("300.00"),
+                        availableRadius: new BigDecimal("30.0"),
+                        teamSize: 6,
+                        portfolioImages: "[\"https://example.com/electric1.jpg\"]",
+                        specialties: "家装水电，商用电路维修",
+                        workingHours: "全天候服务，支持紧急维修",
+                        insuranceStatus: "已购买人身意外险",
+                        licensesHeld: "特种作业操作证",
+                        minProjectBudget: new BigDecimal("1000.00"),
+                        maxProjectBudget: new BigDecimal("100000.00"),
+                        location: "上海市徐汇区",
+                        contactInfo: "老王水电维修 021-6666-0002"
+                    ],
+                    [
+                        serviceType: "泥瓦",
+                        experienceYears: 15,
+                        certifications: "砌筑工高级技师，瓦工技能证书",
+                        priceRangeMin: new BigDecimal("200.00"),
+                        priceRangeMax: new BigDecimal("500.00"),
+                        availableRadius: new BigDecimal("40.0"),
+                        teamSize: 12,
+                        portfolioImages: "[\"https://example.com/masonry1.jpg\", \"https://example.com/masonry2.jpg\"]",
+                        specialties: "墙体砌筑，瓷砖铺贴，防水工程",
+                        workingHours: "周一至周日 7:00-19:00",
+                        insuranceStatus: "团体意外险",
+                        licensesHeld: "建筑工人职业技能等级证书",
+                        minProjectBudget: new BigDecimal("5000.00"),
+                        maxProjectBudget: new BigDecimal("500000.00"),
+                        location: "深圳市南山区",
+                        contactInfo: "南山泥瓦工程队 0755-3333-0003"
+                    ],
+                    [
+                        serviceType: "木工",
+                        experienceYears: 10,
+                        certifications: "木工高级技师，家具设计师证",
+                        priceRangeMin: new BigDecimal("150.00"),
+                        priceRangeMax: new BigDecimal("400.00"),
+                        availableRadius: new BigDecimal("35.0"),
+                        teamSize: 8,
+                        portfolioImages: "[\"https://example.com/carpentry1.jpg\"]",
+                        specialties: "定制家具，木制吊顶，实木地板安装",
+                        workingHours: "周一至周六 8:30-17:30",
+                        insuranceStatus: "已购买工伤保险",
+                        licensesHeld: "木工职业资格证书",
+                        minProjectBudget: new BigDecimal("3000.00"),
+                        maxProjectBudget: new BigDecimal("200000.00"),
+                        location: "广州市番禺区",
+                        contactInfo: "匠心木艺工作室 020-7777-0004"
+                    ],
+                    [
+                        serviceType: "油漆",
+                        experienceYears: 6,
+                        certifications: "涂装工职业资格证",
+                        priceRangeMin: new BigDecimal("80.00"),
+                        priceRangeMax: new BigDecimal("200.00"),
+                        availableRadius: new BigDecimal("25.0"),
+                        teamSize: 4,
+                        portfolioImages: "[\"https://example.com/painting1.jpg\"]",
+                        specialties: "墙面涂装，家具翻新，艺术涂料",
+                        workingHours: "周一至周五 9:00-17:00",
+                        insuranceStatus: "已购买职业健康险",
+                        licensesHeld: "涂装作业安全证书",
+                        minProjectBudget: new BigDecimal("2000.00"),
+                        maxProjectBudget: new BigDecimal("80000.00"),
+                        location: "杭州市西湖区",
+                        contactInfo: "彩虹涂装服务 0571-5555-0005"
+                    ]
+                ]
+
+                supplyData.each { supplyInfo ->
+                    def result = ec.service.sync().name("marketplace.ConstructionServices.create#ConstructionSupply")
+                        .parameters(supplyInfo).disableAuthz().call()
+                    if (result.success) {
+                        suppliesCreated++
+                    }
+                }
+
+                success = true
+                message = "建筑工程演示数据初始化成功！创建了 ${demandsCreated} 个需求，${suppliesCreated} 个服务供应。"
+                ec.logger.info(message)
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="get" noun="ConstructionStatsV2" authenticate="false" allow-remote="true">
+        <description>获取建筑工程统计信息（标准化响应格式 v2.0）</description>
+        <out-parameters>
+            <parameter name="response" type="Map">
+                <description>标准化的API响应</description>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                try {
+                    // 需求统计
+                    def demandCount = ec.entity.find("marketplace.construction.ConstructionDemand")
+                        .disableAuthz().count()
+                    def totalDemands = demandCount ? demandCount.intValue() : 0
+
+                    // 供应统计
+                    def supplyCount = ec.entity.find("marketplace.construction.ConstructionSupply")
+                        .disableAuthz().count()
+                    def totalSupplies = supplyCount ? supplyCount.intValue() : 0
+
+                    // 匹配统计（演示数据）
+                    def totalMatches = totalDemands * 5 // 平均每个需求5个匹配
+                    def averageMatchScore = new BigDecimal("0.57")
+
+                    // 热门分类统计
+                    def topCategories = [
+                        [categoryName: "装修装饰", count: Math.max(1, (totalDemands * 0.4).intValue())],
+                        [categoryName: "维修服务", count: Math.max(1, (totalDemands * 0.3).intValue())],
+                        [categoryName: "新建工程", count: (totalDemands * 0.2).intValue()],
+                        [categoryName: "改造工程", count: (totalDemands * 0.1).intValue()]
+                    ]
+
+                    // 最近活动（演示数据）
+                    def recentActivity = [
+                        [
+                            type: "需求发布",
+                            description: "北京朝阳区住宅装修项目",
+                            timestamp: ec.user.nowTimestamp.minus(3600000), // 1小时前
+                            status: "活跃"
+                        ],
+                        [
+                            type: "服务发布",
+                            description: "专业水电维修团队",
+                            timestamp: ec.user.nowTimestamp.minus(7200000), // 2小时前
+                            status: "活跃"
+                        ],
+                        [
+                            type: "匹配成功",
+                            description: "办公楼改造项目匹配成功",
+                            timestamp: ec.user.nowTimestamp.minus(10800000), // 3小时前
+                            status: "已匹配"
+                        ]
+                    ]
+
+                    // 构建统计数据
+                    Map statsData = [
+                        overview: [
+                            totalDemands: totalDemands,
+                            totalSupplies: totalSupplies,
+                            totalMatches: totalMatches,
+                            averageMatchScore: averageMatchScore
+                        ],
+                        categories: topCategories,
+                        recentActivity: recentActivity,
+                        summary: [
+                            activeProjects: totalDemands + totalSupplies,
+                            matchingRate: totalDemands > 0 ? (totalMatches / totalDemands).round(2) : 0,
+                            avgResponseTime: "2.5小时",
+                            satisfactionRate: "96.8%"
+                        ]
+                    ]
+
+                    // 使用统一包装服务
+                    Map wrapResult = ec.service.sync().name("marketplace.ApiResponseServices.wrap#SuccessResponse")
+                        .parameters([
+                            data: statsData,
+                            message: "建筑工程统计信息获取成功"
+                        ]).call()
+
+                    response = wrapResult.response
+
+                } catch (Exception e) {
+                    ec.logger.error("获取建筑工程统计信息失败: ${e.message}", e)
+
+                    Map errorResult = ec.service.sync().name("marketplace.ApiResponseServices.wrap#ErrorResponse")
+                        .parameters([
+                            errorMessage: "获取统计信息失败：${e.message}",
+                            errorCode: 500
+                        ]).call()
+
+                    response = errorResult.response
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+</services>

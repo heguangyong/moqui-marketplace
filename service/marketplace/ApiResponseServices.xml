@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <!-- ==================== 统一REST API响应包装服务 ==================== -->
+
+    <service verb="wrap" noun="ApiResponse" authenticate="false" allow-remote="false">
+        <description>统一REST API响应格式包装服务</description>
+        <in-parameters>
+            <parameter name="data" type="Object" required="false">
+                <description>业务数据对象</description>
+            </parameter>
+            <parameter name="success" type="Boolean" default="true">
+                <description>操作是否成功</description>
+            </parameter>
+            <parameter name="code" type="Integer" default="200">
+                <description>HTTP状态码</description>
+            </parameter>
+            <parameter name="message" type="String" default="操作成功">
+                <description>提示消息</description>
+            </parameter>
+            <parameter name="errors" type="List" required="false">
+                <description>错误信息列表</description>
+            </parameter>
+            <!-- 分页相关参数 -->
+            <parameter name="total" type="Long" required="false">
+                <description>总记录数</description>
+            </parameter>
+            <parameter name="page" type="Integer" required="false">
+                <description>当前页码</description>
+            </parameter>
+            <parameter name="limit" type="Integer" required="false">
+                <description>每页记录数</description>
+            </parameter>
+            <parameter name="pageCount" type="Integer" required="false">
+                <description>总页数</description>
+            </parameter>
+            <!-- 元数据参数 -->
+            <parameter name="requestId" type="String" required="false">
+                <description>请求ID</description>
+            </parameter>
+            <parameter name="version" type="String" default="1.0">
+                <description>API版本</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="response" type="Map">
+                <description>标准化的REST响应</description>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                import groovy.json.JsonOutput
+                import java.util.UUID
+
+                // 生成请求ID（如果没有提供）
+                String actualRequestId = requestId ?: "req_${UUID.randomUUID().toString().substring(0, 8)}"
+
+                // 构建标准响应结构
+                Map standardResponse = [:]
+
+                // 基础响应信息
+                standardResponse.success = success ?: true
+                standardResponse.code = code ?: 200
+                standardResponse.message = message ?: (success ? "操作成功" : "操作失败")
+
+                // 业务数据
+                if (data != null) {
+                    standardResponse.data = data
+                }
+
+                // 错误信息
+                if (errors && !errors.isEmpty()) {
+                    standardResponse.errors = errors
+                    standardResponse.success = false
+                    if (!code || code == 200) {
+                        standardResponse.code = 400
+                    }
+                }
+
+                // 元数据信息
+                Map meta = [:]
+                meta.timestamp = ec.user.nowTimestamp.time
+                meta.requestId = actualRequestId
+                meta.version = version ?: "1.0"
+                meta.server = "Moqui-Marketplace-${ec.web.request.serverName}"
+
+                // 分页信息（如果提供）
+                if (total != null) {
+                    Map pagination = [:]
+                    pagination.total = total
+                    if (page != null) pagination.page = page
+                    if (limit != null) pagination.limit = limit
+                    if (pageCount != null) pagination.pageCount = pageCount
+
+                    meta.pagination = pagination
+                }
+
+                standardResponse.meta = meta
+
+                // 设置响应
+                response = standardResponse
+
+                // 如果是错误响应，设置HTTP状态码
+                if (!success || (errors && !errors.isEmpty())) {
+                    ec.web.response.setStatus(code ?: 400)
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="wrap" noun="ListResponse" authenticate="false" allow-remote="false">
+        <description>列表数据响应包装</description>
+        <in-parameters>
+            <parameter name="items" type="List" required="true">
+                <description>列表数据</description>
+            </parameter>
+            <parameter name="total" type="Long" required="false">
+                <description>总记录数</description>
+            </parameter>
+            <parameter name="page" type="Integer" default="1">
+                <description>当前页码</description>
+            </parameter>
+            <parameter name="limit" type="Integer" default="20">
+                <description>每页记录数</description>
+            </parameter>
+            <parameter name="message" type="String" default="查询成功">
+                <description>提示消息</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="response" type="Map">
+                <description>标准化的列表响应</description>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                // 计算分页信息
+                Long actualTotal = total ?: (items ? items.size() : 0)
+                Integer pageCount = limit > 0 ? Math.ceil(actualTotal / limit) as Integer : 1
+
+                // 构建列表数据结构
+                Map listData = [:]
+                listData.items = items ?: []
+                listData.count = items ? items.size() : 0
+
+                // 调用统一包装服务
+                Map wrapResult = ec.service.sync().name("marketplace.ApiResponseServices.wrap#ApiResponse")
+                    .parameters([
+                        data: listData,
+                        success: true,
+                        code: 200,
+                        message: message,
+                        total: actualTotal,
+                        page: page,
+                        limit: limit,
+                        pageCount: pageCount
+                    ]).call()
+
+                response = wrapResult.response
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="wrap" noun="ErrorResponse" authenticate="false" allow-remote="false">
+        <description>错误响应包装</description>
+        <in-parameters>
+            <parameter name="errorMessage" type="String" required="true">
+                <description>错误消息</description>
+            </parameter>
+            <parameter name="errorCode" type="Integer" default="400">
+                <description>错误代码</description>
+            </parameter>
+            <parameter name="errorDetails" type="List" required="false">
+                <description>详细错误信息</description>
+            </parameter>
+            <parameter name="validationErrors" type="Map" required="false">
+                <description>字段验证错误</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="response" type="Map">
+                <description>标准化的错误响应</description>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                // 构建错误信息列表
+                List errorList = []
+                errorList.add(errorMessage)
+
+                if (errorDetails) {
+                    errorList.addAll(errorDetails)
+                }
+
+                // 构建错误数据
+                Map errorData = null
+                if (validationErrors) {
+                    errorData = [validation: validationErrors]
+                }
+
+                // 调用统一包装服务
+                Map wrapResult = ec.service.sync().name("marketplace.ApiResponseServices.wrap#ApiResponse")
+                    .parameters([
+                        data: errorData,
+                        success: false,
+                        code: errorCode,
+                        message: errorMessage,
+                        errors: errorList
+                    ]).call()
+
+                response = wrapResult.response
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="wrap" noun="SuccessResponse" authenticate="false" allow-remote="false">
+        <description>成功响应包装</description>
+        <in-parameters>
+            <parameter name="data" type="Object" required="false">
+                <description>成功返回的数据</description>
+            </parameter>
+            <parameter name="message" type="String" default="操作成功">
+                <description>成功消息</description>
+            </parameter>
+            <parameter name="code" type="Integer" default="200">
+                <description>成功状态码</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="response" type="Map">
+                <description>标准化的成功响应</description>
+            </parameter>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                // 调用统一包装服务
+                Map wrapResult = ec.service.sync().name("marketplace.ApiResponseServices.wrap#ApiResponse")
+                    .parameters([
+                        data: data,
+                        success: true,
+                        code: code,
+                        message: message
+                    ]).call()
+
+                response = wrapResult.response
+            ]]></script>
+        </actions>
+    </service>
+
+</services>

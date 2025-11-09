@@ -543,4 +543,90 @@
         </index>
     </entity>
 
+    <!-- ==================== 建筑工程实体 ==================== -->
+
+    <!-- 建筑工程需求 -->
+    <entity entity-name="ConstructionDemand" package="marketplace.construction">
+        <field name="demandId" type="id" is-pk="true"/>
+        <field name="listingId" type="id"/>
+        <field name="projectType" type="text-short"/> <!-- 装修/维修/新建/改造 -->
+        <field name="propertyType" type="text-short"/> <!-- 住宅/商业/办公/工业 -->
+        <field name="area" type="number-decimal"/> <!-- 面积平米 -->
+        <field name="budget" type="currency-amount"/>
+        <field name="urgency" type="text-short"/> <!-- 紧急/一周内/一月内/不急 -->
+        <field name="preferredStartDate" type="date-time"/>
+        <field name="estimatedDuration" type="number-integer"/> <!-- 工期天数 -->
+        <field name="specialRequirements" type="text-long"/>
+        <field name="hasDesignDraft" type="text-indicator" default="N"/>
+        <field name="environmentalRequirements" type="text-medium"/> <!-- 环保要求 -->
+        <field name="contactPreference" type="text-short"/> <!-- 联系方式偏好 -->
+        <field name="createdDate" type="date-time"/>
+        <field name="lastUpdated" type="date-time"/>
+        <relationship type="one" related="marketplace.listing.Listing"/>
+    </entity>
+
+    <!-- 建筑工程服务供应 -->
+    <entity entity-name="ConstructionSupply" package="marketplace.construction">
+        <field name="supplyId" type="id" is-pk="true"/>
+        <field name="listingId" type="id"/>
+        <field name="serviceType" type="text-short"/> <!-- 水电/泥瓦/木工/油漆/防水/吊顶/全包 -->
+        <field name="experienceYears" type="number-integer"/>
+        <field name="certifications" type="text-medium"/> <!-- 资质证书 -->
+        <field name="priceRangeMin" type="currency-amount"/>
+        <field name="priceRangeMax" type="currency-amount"/>
+        <field name="availableRadius" type="number-decimal"/> <!-- 服务半径km -->
+        <field name="teamSize" type="number-integer"/>
+        <field name="portfolioImages" type="text-long"/> <!-- 作品图片URLs JSON数组 -->
+        <field name="specialties" type="text-medium"/> <!-- 专长领域 -->
+        <field name="workingHours" type="text-short"/> <!-- 工作时间偏好 -->
+        <field name="insuranceStatus" type="text-short"/> <!-- 保险状态 -->
+        <field name="licensesHeld" type="text-medium"/> <!-- 持有执照 -->
+        <field name="minProjectBudget" type="currency-amount"/>
+        <field name="maxProjectBudget" type="currency-amount"/>
+        <field name="createdDate" type="date-time"/>
+        <field name="lastUpdated" type="date-time"/>
+        <relationship type="one" related="marketplace.listing.Listing"/>
+    </entity>
+
+    <!-- 建筑工程评价 -->
+    <entity entity-name="ConstructionReview" package="marketplace.construction">
+        <field name="reviewId" type="id" is-pk="true"/>
+        <field name="matchId" type="id"/>
+        <field name="reviewerPartyId" type="id"/>
+        <field name="reviewedPartyId" type="id"/>
+        <field name="projectType" type="text-short"/>
+        <field name="overallRating" type="number-decimal"/> <!-- 总体评分 1-5 -->
+        <field name="qualityRating" type="number-decimal"/> <!-- 质量评分 -->
+        <field name="timelinessRating" type="number-decimal"/> <!-- 时效评分 -->
+        <field name="communicationRating" type="number-decimal"/> <!-- 沟通评分 -->
+        <field name="costEffectivenessRating" type="number-decimal"/> <!-- 性价比评分 -->
+        <field name="reviewText" type="text-long"/>
+        <field name="projectPhotos" type="text-long"/> <!-- 项目照片URLs -->
+        <field name="wouldRecommend" type="text-indicator" default="Y"/>
+        <field name="reviewDate" type="date-time"/>
+        <relationship type="one" title="Reviewer" related="mantle.party.Party">
+            <key-map field-name="reviewerPartyId" related="partyId"/>
+        </relationship>
+        <relationship type="one" title="Reviewed" related="mantle.party.Party">
+            <key-map field-name="reviewedPartyId" related="partyId"/>
+        </relationship>
+    </entity>
+
+    <!-- 建筑工程类型字典 -->
+    <entity entity-name="ConstructionCategory" package="marketplace.construction">
+        <field name="categoryId" type="id" is-pk="true"/>
+        <field name="categoryName" type="text-medium"/>
+        <field name="parentCategoryId" type="id"/>
+        <field name="description" type="text-long"/>
+        <field name="typicalDurationDays" type="number-integer"/>
+        <field name="typicalBudgetMin" type="currency-amount"/>
+        <field name="typicalBudgetMax" type="currency-amount"/>
+        <field name="requiresLicense" type="text-indicator" default="N"/>
+        <field name="riskLevel" type="text-short"/> <!-- 风险等级：低/中/高 -->
+        <field name="sortOrder" type="number-integer"/>
+        <relationship type="one" title="Parent" related="marketplace.construction.ConstructionCategory">
+            <key-map field-name="parentCategoryId" related="categoryId"/>
+        </relationship>
+    </entity>
+
 </entities>

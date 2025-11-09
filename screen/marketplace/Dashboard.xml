@@ -43,6 +43,8 @@
             recentMatchesDisplay = []
             telegramSessionsDisplay = []
             recentTelegramMessagesDisplay = []
+            recentProducts = []
+            categoryNameById = [:]
             botUsername = System.getProperty("mcp.telegram.bot.username") ?: System.getProperty("telegram.bot.username") ?: "@待配置"
 
             def partyNameCache = [:]
@@ -122,6 +124,28 @@
                 recentDemands = demandFind.list()
             } catch (Exception e) {
                 ec.logger.warn("无法查询需求信息: ${e.message}")
+            }
+
+            try {
+                def productFind = ec.entity.find("marketplace.ecommerce.EcommerceProduct")
+                        .orderBy("-lastUpdatedDate")
+                        .limit(5)
+                productFind.disableAuthz()
+                recentProducts = productFind.list()
+                Set categoryIds = new LinkedHashSet(recentProducts?.collect { it.productCategoryId }?.findAll { it })
+                if (categoryIds && !categoryIds.isEmpty()) {
+                    def catFind = ec.entity.find("marketplace.ecommerce.EcommerceProductCategory")
+                            .condition("productCategoryId", EntityCondition.IN, categoryIds)
+                            .disableAuthz()
+                    def catList = catFind.list()
+                    if (catList) {
+                        catList.each { catVal ->
+                            categoryNameById[catVal.productCategoryId] = catVal.categoryName ?: catVal.productCategoryId
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                ec.logger.warn("无法查询电商商品: ${e.message}")
             }
 
             // 列表缓存
@@ -328,6 +352,43 @@
                     <label text="Telegram 会话" style="font-size:1.25rem;color:#ff9800"/>
                     <label text="${telegramStats.activeSessions ?: 0}" style="font-size:2rem;font-weight:bold;color:#ff9800;margin:8px 0"/>
                     <label text="今日新增 ${telegramStats.todaySessions ?: 0}" style="font-size:0.875rem;color:#616161"/>
+                </container>
+            </row-col>
+        </container-row>
+
+        <container-row>
+            <row-col lg="12">
+                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
+                    <label text="最新商品" style="font-size:1.25rem;font-weight:500"/>
+                    <if condition="recentProducts">
+                        <container style="table table-striped margin-top">
+                            <container style="thead">
+                                <container style="tr">
+                                    <container style="th"><label text="商品"/></container>
+                                    <container style="th"><label text="类别"/></container>
+                                    <container style="th"><label text="价格"/></container>
+                                    <container style="th"><label text="库存"/></container>
+                                    <container style="th"><label text="状态"/></container>
+                                </container>
+                            </container>
+                            <container style="tbody">
+                                <section-iterate list="recentProducts" entry="product">
+                                    <widgets>
+                                        <container style="tr">
+                                            <container style="td"><label text="${product.productName ?: product.ecommerceProductId}"/></container>
+                                            <container style="td"><label text="${categoryNameById ? (categoryNameById[product.productCategoryId] ?: product.productCategoryId ?: '—') : (product.productCategoryId ?: '—')}"/></container>
+                                            <container style="td"><label text="${product.price ? ec.l10n.formatCurrency(product.price, product.currencyUomId ?: 'CNY') : '—'}"/></container>
+                                            <container style="td"><label text="${product.stockQuantity ?: 0}"/></container>
+                                            <container style="td"><label text="${product.status ?: 'INACTIVE'}"/></container>
+                                        </container>
+                                    </widgets>
+                                </section-iterate>
+                            </container>
+                        </container>
+                    </if>
+                    <if condition="!recentProducts">
+                        <label text="暂无商品记录" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                    </if>
                 </container>
             </row-col>
         </container-row>

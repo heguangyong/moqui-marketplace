@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<entity-facade-xml type="demo">
+
+    <!-- ==================== 电商分类 ==================== -->
+    <marketplace.ecommerce.EcommerceProductCategory productCategoryId="EC_CAT_DIGITAL"
+                                                   categoryName="智能硬件"
+                                                   description="AI 终端、物联网设备"
+                                                   status="ACTIVE"
+                                                   sequenceNum="10"
+                                                   createdDate="2025-10-01 08:00:00"
+                                                   createdByUserId="admin"/>
+    <marketplace.ecommerce.EcommerceProductCategory productCategoryId="EC_CAT_WORKSPACE"
+                                                   categoryName="灵活办公"
+                                                   description="办公家具、空间改造"
+                                                   status="ACTIVE"
+                                                   sequenceNum="20"
+                                                   createdDate="2025-10-01 08:05:00"
+                                                   createdByUserId="admin"/>
+    <marketplace.ecommerce.EcommerceProductCategory productCategoryId="EC_CAT_APPAREL"
+                                                   categoryName="品牌周边"
+                                                   description="定制服饰、礼品"
+                                                   status="ACTIVE"
+                                                   sequenceNum="30"
+                                                   createdDate="2025-10-01 08:10:00"
+                                                   createdByUserId="admin"/>
+
+    <!-- ==================== 示例客户 ==================== -->
+    <mantle.party.Party partyId="EC_CUSTOMER_001" partyTypeEnumId="PtyOrganization"/>
+    <mantle.party.Organization partyId="EC_CUSTOMER_001" organizationName="潮流买手店"/>
+    <mantle.party.Party partyId="EC_CUSTOMER_002" partyTypeEnumId="PtyOrganization"/>
+    <mantle.party.Organization partyId="EC_CUSTOMER_002" organizationName="匠心设计工作室"/>
+
+    <marketplace.ecommerce.EcommerceCustomer ecommerceCustomerId="EC_CUST_001"
+                                            partyId="EC_CUSTOMER_001"
+                                            fullName="潮流买手店"
+                                            contactEmail="buyer@example.com"
+                                            contactPhone="13800000011"
+                                            preferredChannel="TELEGRAM"
+                                            status="ACTIVE"
+                                            createdDate="2025-10-01 09:00:00"
+                                            createdByUserId="admin"/>
+    <marketplace.ecommerce.EcommerceCustomer ecommerceCustomerId="EC_CUST_002"
+                                            partyId="EC_CUSTOMER_002"
+                                            fullName="匠心设计工作室"
+                                            contactEmail="studio@example.com"
+                                            contactPhone="13800000022"
+                                            preferredChannel="AI_AGENT"
+                                            status="ACTIVE"
+                                            createdDate="2025-10-01 09:05:00"
+                                            createdByUserId="admin"/>
+
+    <!-- ==================== 购物车示例 ==================== -->
+    <marketplace.ecommerce.EcommerceShoppingCart cartId="EC_CART_001"
+                                                ecommerceCustomerId="EC_CUST_001"
+                                                status="ACTIVE"
+                                                totalAmount="0.00"
+                                                createdDate="2025-10-01 09:10:00"
+                                                createdByUserId="admin"/>
+
+    <!-- ==================== 示例商品 ==================== -->
+    <marketplace.ecommerce.EcommerceProduct ecommerceProductId="ECP1001"
+                                           productCode="SKU-VOICE-01"
+                                           productName="AI 智能语音音箱"
+                                           description="集成多模AI助理，支持语音采购与供应链提醒"
+                                           productCategoryId="EC_CAT_DIGITAL"
+                                           price="699.00"
+                                           currencyUomId="CNY"
+                                           stockQuantity="35"
+                                           imageUrl="https://img.demo.ai/speaker.png"
+                                           status="ACTIVE"
+                                           createdDate="2025-10-02 08:00:00"
+                                           createdByUserId="admin"
+                                           lastUpdatedDate="2025-10-02 08:00:00"/>
+
+    <marketplace.ecommerce.EcommerceProduct ecommerceProductId="ECP1002"
+                                           productCode="SKU-WORK-02"
+                                           productName="模块化灵活办公桌"
+                                           description="适配共享办公与展会布置的可扩展桌面系统"
+                                           productCategoryId="EC_CAT_WORKSPACE"
+                                           price="2999.00"
+                                           currencyUomId="CNY"
+                                           stockQuantity="12"
+                                           status="ACTIVE"
+                                           createdDate="2025-10-02 08:30:00"
+                                           createdByUserId="admin"
+                                           lastUpdatedDate="2025-10-03 10:15:00"/>
+
+    <marketplace.ecommerce.EcommerceProduct ecommerceProductId="ECP1003"
+                                           productCode="SKU-WORK-03"
+                                           productName="人体工学支撑椅"
+                                           description="12向调节与记忆泡棉，适合长时间项目室内办公"
+                                           productCategoryId="EC_CAT_WORKSPACE"
+                                           price="1899.00"
+                                           currencyUomId="CNY"
+                                           stockQuantity="28"
+                                           status="ACTIVE"
+                                           createdDate="2025-10-02 09:00:00"
+                                           createdByUserId="admin"
+                                           lastUpdatedDate="2025-10-04 09:45:00"/>
+
+    <marketplace.ecommerce.EcommerceProduct ecommerceProductId="ECP1004"
+                                           productCode="SKU-APP-01"
+                                           productName="定制Logo连帽衫"
+                                           description="支持24小时出样，适合作为活动与展会周边"
+                                           productCategoryId="EC_CAT_APPAREL"
+                                           price="199.00"
+                                           currencyUomId="CNY"
+                                           stockQuantity="80"
+                                           status="ACTIVE"
+                                           createdDate="2025-10-02 09:30:00"
+                                           createdByUserId="admin"
+                                           lastUpdatedDate="2025-10-05 12:00:00"/>
+
+    <marketplace.ecommerce.EcommerceProduct ecommerceProductId="ECP1005"
+                                           productCode="SKU-DIGI-05"
+                                           productName="便携式热敏标签打印机"
+                                           description="配套智能供需平台，开单即打标签"
+                                           productCategoryId="EC_CAT_DIGITAL"
+                                           price="1299.00"
+                                           currencyUomId="CNY"
+                                           stockQuantity="30"
+                                           status="ACTIVE"
+                                           createdDate="2025-10-02 10:00:00"
+                                           createdByUserId="admin"
+                                           lastUpdatedDate="2025-10-05 14:10:00"/>
+
+    <!-- ==================== 示例订单 ==================== -->
+    <marketplace.ecommerce.EcommerceOrder ecommerceOrderId="EC_ORDER_001"
+                                         ecommerceCustomerId="EC_CUST_001"
+                                         cartId="EC_CART_001"
+                                         orderStatus="CREATED"
+                                         paymentStatus="UNPAID"
+                                         orderTotal="699.00"
+                                         currencyUomId="CNY"
+                                         shippingAddress="东莞市松山湖创新街 18 号"
+                                         createdDate="2025-10-05 10:00:00"
+                                         createdByUserId="admin"
+                                         lastUpdatedDate="2025-10-05 10:00:00"/>
+
+    <marketplace.ecommerce.EcommerceOrderItem orderItemSeqId="00001"
+                                             ecommerceOrderId="EC_ORDER_001"
+                                             ecommerceProductId="ECP1001"
+                                             quantity="1"
+                                             unitPrice="699.00"
+                                             itemTotal="699.00"
+                                             createdDate="2025-10-05 10:00:00"
+                                             createdByUserId="admin"
+                                             lastUpdatedDate="2025-10-05 10:00:00"/>
+
+    <!-- ==================== 示例评价 ==================== -->
+    <marketplace.ecommerce.EcommerceProductReview productReviewId="EC_REVIEW_001"
+                                                 ecommerceProductId="ECP1001"
+                                                 ecommerceCustomerId="EC_CUST_002"
+                                                 rating="5"
+                                                 reviewText="语音助手很贴合项目沟通，能同步库存提醒，适合快闪店使用。"
+                                                 reviewDate="2025-10-06 11:00:00"
+                                                 status="ACTIVE"
+                                                 createdDate="2025-10-06 11:00:00"
+                                                 createdByUserId="admin"
+                                                 lastUpdatedDate="2025-10-06 11:00:00"/>
+
+</entity-facade-xml>

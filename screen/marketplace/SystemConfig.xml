@@ -69,6 +69,39 @@
         </container-row>
 
         <container-row>
+            <row-col lg="4" md="6" sm="12">
+                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
+                    <label text="🛒 电商配置" style="font-size:1.25rem;font-weight:500"/>
+                    <label text="Telegram 指令：/product · /order · /ec_recommend" style="display:block;margin-top:8px;color:#616161"/>
+                    <label text="REST 入口：/rest/s1/marketplace/ecommerce/..." style="display:block;margin-top:4px;color:#616161"/>
+                    <label text="控制台：智能推荐 → 电商控制台" style="display:block;margin-top:4px;color:#616161"/>
+                    <container style="margin-top:12px;">
+                        <link url="../Ecommerce" text="打开电商控制台" link-type="anchor" style="display:block;margin-bottom:4px;"/>
+                        <link url="../Dashboard" text="查看 Dashboard" link-type="anchor" style="display:block;"/>
+                    </container>
+                </container>
+            </row-col>
+            <row-col lg="4" md="6" sm="12">
+                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
+                    <label text="🌐 Webhook / Ngrok" style="font-size:1.25rem;font-weight:500"/>
+                    <label text="当前隧道: https://41416ace43b7.ngrok-free.app" style="display:block;margin-top:8px;color:#616161"/>
+                    <label text="Moqui: http://localhost:8080/rest/s1/mcp/telegram" style="display:block;margin-top:4px;color:#616161"/>
+                    <label text="命令: testing-tools/telegram_webhook_test.sh" style="display:block;margin-top:4px;color:#9e9e9e"/>
+                    <label text="如需重设使用 testing-tools/telegram_webhook_setup.sh" style="display:block;margin-top:4px;color:#9e9e9e"/>
+                </container>
+            </row-col>
+            <row-col lg="4" md="12" sm="12">
+                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
+                    <label text="📁 测试脚本 & REST 示例" style="font-size:1.25rem;font-weight:500"/>
+                    <label text="testing-tools/ecommerce_order_rest_examples.sh" style="display:block;margin-top:8px;color:#616161"/>
+                    <label text="环境变量: BASE_URL=http://localhost:8080 TOKEN=<JWT>" style="display:block;margin-top:4px;color:#9e9e9e"/>
+                    <label text="RUN: ./testing-tools/ecommerce_order_rest_examples.sh" style="display:block;margin-top:4px;color:#9e9e9e"/>
+                    <label text="输出: 订单创建→订单列表→状态查询" style="display:block;margin-top:4px;color:#616161"/>
+                </container>
+            </row-col>
+        </container-row>
+
+        <container-row>
             <row-col lg="12">
                 <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
                     <label text="文档与调度" style="font-size:1.25rem;font-weight:500"/>

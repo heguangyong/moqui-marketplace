@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
+        default-menu-title="流行电商"
+        require-authentication="false">
+
+    <actions>
+        <script><![CDATA[
+            import org.moqui.entity.EntityCondition
+            import java.time.LocalDate
+            import java.time.ZoneId
+            import java.math.BigDecimal
+            import java.math.RoundingMode
+
+            productStats = [total: 0, active: 0, lowStock: 0, categories: 0]
+            productCategoryName = [:]
+            recentProducts = []
+            lowStockProducts = []
+            orderStats = [total: 0, open: 0, today: 0]
+            statusSummary = [:]
+            recentOrders = []
+            openOrders = []
+            categorySales = []
+            topCustomers = []
+
+            try {
+                def categoryList = ec.entity.find("marketplace.ecommerce.EcommerceProductCategory")
+                        .disableAuthz().list()
+                categoryList?.each { cat ->
+                    productCategoryName[cat.productCategoryId] = cat.categoryName ?: cat.productCategoryId
+                }
+            } catch (Exception e) {
+                ec.logger.warn("无法加载电商分类: ${e.message}")
+            }
+
+            try {
+                def productList = ec.entity.find("marketplace.ecommerce.EcommerceProduct")
+                        .disableAuthz().list()
+                productStats.total = productList?.size() ?: 0
+                productStats.active = productList?.count { "ACTIVE".equalsIgnoreCase(it.status ?: "") } ?: 0
+                productStats.lowStock = productList?.count {
+                    def qty = it.stockQuantity instanceof Number ? ((Number) it.stockQuantity).longValue() : 0L
+                    qty < 10L
+                } ?: 0
+                Set categorySet = new LinkedHashSet(productList?.collect { it.productCategoryId }?.findAll { it })
+                productStats.categories = categorySet?.size() ?: 0
+
+                recentProducts = productList?.sort { a, b ->
+                    def tsA = a.lastUpdatedDate ?: a.createdDate
+                    def tsB = b.lastUpdatedDate ?: b.createdDate
+                    (tsB?.time ?: 0) <=> (tsA?.time ?: 0)
+                }?.take(6) ?: []
+
+                lowStockProducts = productList?.findAll {
+                    def qty = it.stockQuantity instanceof Number ? ((Number) it.stockQuantity).longValue() : 0L
+                    qty in 0..<10
+                }?.sort { it.stockQuantity ?: 0 }?.take(5) ?: []
+            } catch (Exception e) {
+                ec.logger.warn("加载商品统计失败: ${e.message}")
+            }
+
+            try {
+                def orderFind = ec.entity.find("marketplace.ecommerce.EcommerceOrder")
+                        .orderBy("-createdDate")
+                        .limit(20)
+                        .disableAuthz()
+                def orders = orderFind.list()
+                orderStats.total = ec.entity.find("marketplace.ecommerce.EcommerceOrder").disableAuthz().count() ?: 0
+                statusSummary = orders?.groupBy { it.orderStatus ?: "UNKNOWN" }?.collectEntries { k, v -> [(k): v.size()] } ?: [:]
+
+                def openStatuses = ["CREATED","PAID","PROCESSING"]
+                orderStats.open = ec.entity.find("marketplace.ecommerce.EcommerceOrder")
+                        .condition("orderStatus", EntityCondition.IN, openStatuses)
+                        .disableAuthz()
+                        .count() ?: 0
+
+                LocalDate today = LocalDate.now(ZoneId.systemDefault())
+                long startOfDay = today.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                orderStats.today = orders?.count { it.createdDate && it.createdDate.time >= startOfDay } ?: 0
+
+                recentOrders = orders?.take(6) ?: []
+                openOrders = orders?.findAll { (it.orderStatus ?: "") in openStatuses }?.take(5) ?: []
+            } catch (Exception e) {
+                ec.logger.warn("加载订单统计失败: ${e.message}")
+            }
+
+            try {
+                def itemList = ec.entity.find("marketplace.ecommerce.EcommerceOrderItem").disableAuthz().list()
+                Map<String, Map> productCache = [:]
+                Map<String, Map> categoryAgg = [:]
+                itemList?.each { itemVal ->
+                    String productId = itemVal.ecommerceProductId
+                    if (!productId) return
+                    Map prod = productCache[productId]
+                    if (!prod) {
+                        prod = ec.entity.find("marketplace.ecommerce.EcommerceProduct")
+                                .condition("ecommerceProductId", productId)
+                                .disableAuthz().one()?.getMap(false)
+                        productCache[productId] = prod
+                    }
+                    String categoryId = prod?.productCategoryId ?: "UNSPECIFIED"
+                    BigDecimal itemTotal = itemVal.itemTotal instanceof BigDecimal ?
+                            (BigDecimal) itemVal.itemTotal :
+                            (itemVal.itemTotal ? new BigDecimal(itemVal.itemTotal.toString()) : BigDecimal.ZERO)
+                    Map agg = categoryAgg[categoryId] ?: [total: BigDecimal.ZERO, quantity: 0L]
+                    agg.total = agg.total.add(itemTotal ?: BigDecimal.ZERO)
+                    Long qty = itemVal.quantity instanceof Number ? ((Number) itemVal.quantity).longValue() : 0L
+                    agg.quantity = agg.quantity + qty
+                    categoryAgg[categoryId] = agg
+                }
+                categorySales = categoryAgg.collect { cid, agg ->
+                    [
+                        categoryId  : cid,
+                        categoryName: productCategoryName[cid] ?: (cid == "UNSPECIFIED" ? "未分类" : cid),
+                        totalAmount : agg.total,
+                        quantity    : agg.quantity
+                    ]
+                }.sort { a, b -> (b.totalAmount ?: BigDecimal.ZERO) <=> (a.totalAmount ?: BigDecimal.ZERO) }.take(6)
+            } catch (Exception e) {
+                ec.logger.warn("统计品类销售失败: ${e.message}")
+            }
+
+            try {
+                def orders = ec.entity.find("marketplace.ecommerce.EcommerceOrder").disableAuthz().list()
+                Map<String, Map> customerAgg = [:]
+                orders?.each { orderVal ->
+                    String customerId = orderVal.ecommerceCustomerId ?: "UNASSIGNED"
+                    Map agg = customerAgg[customerId] ?: [orders: 0, amount: BigDecimal.ZERO]
+                    agg.orders = agg.orders + 1
+                    BigDecimal orderTotal = orderVal.orderTotal instanceof BigDecimal ?
+                            (BigDecimal) orderVal.orderTotal :
+                            (orderVal.orderTotal ? new BigDecimal(orderVal.orderTotal.toString()) : BigDecimal.ZERO)
+                    agg.amount = agg.amount.add(orderTotal ?: BigDecimal.ZERO)
+                    customerAgg[customerId] = agg
+                }
+                topCustomers = customerAgg.collect { cid, agg ->
+                    [
+                        ecommerceCustomerId: cid,
+                        customerName       : cid,
+                        orderCount         : agg.orders,
+                        totalAmount        : agg.amount
+                    ]
+                }.sort { a, b -> (b.totalAmount ?: BigDecimal.ZERO) <=> (a.totalAmount ?: BigDecimal.ZERO) }.take(5)
+
+                // 填充客户名称
+                topCustomers.each { Map cust ->
+                    if (cust.ecommerceCustomerId && cust.ecommerceCustomerId != "UNASSIGNED") {
+                        def customerValue = ec.entity.find("marketplace.ecommerce.EcommerceCustomer")
+                                .condition("ecommerceCustomerId", cust.ecommerceCustomerId)
+                                .disableAuthz().one()
+                        if (customerValue) {
+                            cust.customerName = customerValue.fullName ?: customerValue.ecommerceCustomerId
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                ec.logger.warn("统计客户信息失败: ${e.message}")
+            }
+        ]]></script>
+    </actions>
+
+    <widgets>
+        <container style="padding:16px;">
+            <label text="流行电商控制台" style="font-size:1.5rem;font-weight:600;margin-bottom:16px;display:block"/>
+            <label text="基于 Telegram 的商品、库存与订单协同中心" style="color:#616161;margin-bottom:24px;display:block"/>
+
+        <container-row>
+            <row-col lg="3" md="6" sm="12">
+                <container style="text-align:center;margin-bottom:16px;border:1px solid #e0e0e0;border-radius:6px;padding:16px;">
+                    <label text="商品总数" style="font-size:1rem;color:#616161"/>
+                    <label text="${productStats.total ?: 0}" style="font-size:2rem;font-weight:bold;color:#2196f3;margin:8px 0"/>
+                    <label text="活跃 ${productStats.active ?: 0}" style="font-size:0.9rem;color:#9e9e9e"/>
+                </container>
+            </row-col>
+            <row-col lg="3" md="6" sm="12">
+                <container style="text-align:center;margin-bottom:16px;border:1px solid #e0e0e0;border-radius:6px;padding:16px;">
+                    <label text="低库存" style="font-size:1rem;color:#f57c00"/>
+                    <label text="${productStats.lowStock ?: 0}" style="font-size:2rem;font-weight:bold;color:#f57c00;margin:8px 0"/>
+                    <label text="阈值 &lt; 10" style="font-size:0.9rem;color:#9e9e9e"/>
+                </container>
+            </row-col>
+            <row-col lg="3" md="6" sm="12">
+                <container style="text-align:center;margin-bottom:16px;border:1px solid #e0e0e0;border-radius:6px;padding:16px;">
+                    <label text="待处理订单" style="font-size:1rem;color:#009688"/>
+                    <label text="${orderStats.open ?: 0}" style="font-size:2rem;font-weight:bold;color:#009688;margin:8px 0"/>
+                    <label text="今日新建 ${orderStats.today ?: 0}" style="font-size:0.9rem;color:#9e9e9e"/>
+                </container>
+            </row-col>
+            <row-col lg="3" md="6" sm="12">
+                <container style="text-align:center;margin-bottom:16px;border:1px solid #e0e0e0;border-radius:6px;padding:16px;">
+                    <label text="品类覆盖" style="font-size:1rem;color:#7b1fa2"/>
+                    <label text="${productStats.categories ?: 0}" style="font-size:2rem;font-weight:bold;color:#7b1fa2;margin:8px 0"/>
+                    <label text="Telegram 菜单实时同步" style="font-size:0.9rem;color:#9e9e9e"/>
+                </container>
+            </row-col>
+        </container-row>
+
+        <container-row>
+            <row-col lg="12">
+                <container style="border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
+                    <label text="常用操作" style="font-size:1.1rem;font-weight:500;display:block;margin-bottom:12px"/>
+                    <container style="display:flex;flex-wrap:wrap;gap:12px;">
+                        <link text="➕ Telegram /product add" url="#" link-type="anchor"
+                              style="padding:8px 12px;border:1px solid #2196f3;border-radius:4px;color:#2196f3;"
+                              transition="false"/>
+                        <link text="🛒 Telegram /order create" url="#" link-type="anchor"
+                              style="padding:8px 12px;border:1px solid #009688;border-radius:4px;color:#009688;"
+                              transition="false"/>
+                        <link text="📊 查看匹配 Dashboard" url="../Dashboard" link-type="anchor"
+                              style="padding:8px 12px;border:1px solid #795548;border-radius:4px;color:#795548;"/>
+                        <link text="⚙️ 电商配置 (SystemConfig)" url="../SystemConfig" link-type="anchor"
+                              style="padding:8px 12px;border:1px solid #546e7a;border-radius:4px;color:#546e7a;"/>
+                        <label text="提示：指令均在 Telegram Bot 中执行，Web 控制台仅用于监控与校验。" style="color:#757575;padding:8px 0;"/>
+                    </container>
+                </container>
+            </row-col>
+        </container-row>
+
+        <container-row>
+            <row-col lg="6" md="12">
+                <container style="border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
+                    <label text="最新商品" style="font-size:1.1rem;font-weight:500"/>
+                    <if condition="recentProducts">
+                        <container style="table table-striped margin-top">
+                            <container style="thead">
+                                <container style="tr">
+                                    <container style="th"><label text="名称"/></container>
+                                    <container style="th"><label text="分类"/></container>
+                                    <container style="th"><label text="价格"/></container>
+                                    <container style="th"><label text="库存"/></container>
+                                </container>
+                            </container>
+                            <container style="tbody">
+                                <section-iterate list="recentProducts" entry="product">
+                                    <widgets>
+                                        <container style="tr">
+                                            <container style="td"><label text="${product.productName ?: product.ecommerceProductId}"/></container>
+                                            <container style="td"><label text="${productCategoryName[product.productCategoryId] ?: product.productCategoryId ?: '—'}"/></container>
+                                            <container style="td"><label text="${product.price ? ec.l10n.formatCurrency(product.price, product.currencyUomId ?: 'CNY') : '—'}"/></container>
+                                            <container style="td"><label text="${product.stockQuantity ?: 0}"/></container>
+                                        </container>
+                                    </widgets>
+                                </section-iterate>
+                            </container>
+                        </container>
+                    </if>
+                    <if condition="!recentProducts">
+                        <label text="暂无商品记录" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                    </if>
+                </container>
+            </row-col>
+            <row-col lg="6" md="12">
+                <container style="border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
+                    <label text="最新订单" style="font-size:1.1rem;font-weight:500"/>
+                    <if condition="recentOrders">
+                        <container style="table table-striped margin-top">
+                            <container style="thead">
+                                <container style="tr">
+                                    <container style="th"><label text="订单"/></container>
+                                    <container style="th"><label text="状态"/></container>
+                                    <container style="th"><label text="金额"/></container>
+                                    <container style="th"><label text="客户"/></container>
+                                </container>
+                            </container>
+                            <container style="tbody">
+                                <section-iterate list="recentOrders" entry="order">
+                                    <widgets>
+                                        <container style="tr">
+                                            <container style="td"><label text="${order.ecommerceOrderId}"/></container>
+                                            <container style="td"><label text="${order.orderStatus ?: '—'}"/></container>
+                                            <container style="td"><label text="${order.orderTotal ? ec.l10n.formatCurrency(order.orderTotal, order.currencyUomId ?: 'CNY') : '—'}"/></container>
+                                            <container style="td"><label text="${order.ecommerceCustomerId ?: '—'}"/></container>
+                                        </container>
+                                    </widgets>
+                                </section-iterate>
+                            </container>
+                        </container>
+                    </if>
+                    <if condition="!recentOrders">
+                        <label text="暂无订单记录" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                    </if>
+                </container>
+            </row-col>
+        </container-row>
+
+        <container-row>
+            <row-col lg="6" md="12">
+                <container style="border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
+                    <label text="订单状态分布" style="font-size:1.1rem;font-weight:500"/>
+                    <if condition="statusSummary">
+                        <section-iterate list="statusSummary.entrySet()" entry="entry">
+                            <widgets>
+                                <container style="display:flex;justify-content:space-between;border-bottom:1px solid #f0f0f0;padding:6px 0;">
+                                    <label text="${entry.key}" style="font-weight:500"/>
+                                    <label text="${entry.value}" style="color:#616161"/>
+                                </container>
+                            </widgets>
+                        </section-iterate>
+                    </if>
+                    <if condition="!statusSummary || statusSummary.isEmpty()">
+                        <label text="暂无状态数据" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                    </if>
+                </container>
+            </row-col>
+            <row-col lg="6" md="12">
+                <container style="border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
+                    <label text="品类销售排行" style="font-size:1.1rem;font-weight:500"/>
+                    <if condition="categorySales">
+                        <section-iterate list="categorySales" entry="cs">
+                            <widgets>
+                                <container style="padding:6px 0;border-bottom:1px solid #f0f0f0;">
+                                    <label text="${cs.categoryName}" style="font-weight:500"/>
+                                    <label text="${cs.totalAmount ? ec.l10n.formatCurrency(cs.totalAmount, 'CNY') : '—'} / 数量 ${cs.quantity ?: 0}"
+                                           style="display:block;color:#616161"/>
+                                </container>
+                            </widgets>
+                        </section-iterate>
+                    </if>
+                    <if condition="!categorySales">
+                        <label text="暂无销售数据" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                    </if>
+                </container>
+            </row-col>
+        </container-row>
+
+        <container-row>
+            <row-col lg="6" md="12">
+                <container style="border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
+                    <label text="低库存提醒" style="font-size:1.1rem;font-weight:500"/>
+                    <if condition="lowStockProducts">
+                        <section-iterate list="lowStockProducts" entry="product">
+                            <widgets>
+                                <container style="padding:6px 0;border-bottom:1px solid #f0f0f0;">
+                                    <label text="${product.productName ?: product.ecommerceProductId}" style="font-weight:500"/>
+                                    <label text="库存 ${product.stockQuantity ?: 0} 件 · 分类 ${productCategoryName[product.productCategoryId] ?: '—'}"
+                                           style="display:block;color:#616161"/>
+                                </container>
+                            </widgets>
+                        </section-iterate>
+                    </if>
+                    <if condition="!lowStockProducts">
+                        <label text="暂无低库存商品" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                    </if>
+                </container>
+            </row-col>
+            <row-col lg="6" md="12">
+                <container style="border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
+                    <label text="主要客户" style="font-size:1.1rem;font-weight:500"/>
+                    <if condition="topCustomers">
+                        <section-iterate list="topCustomers" entry="cust">
+                            <widgets>
+                                <container style="padding:6px 0;border-bottom:1px solid #f0f0f0;">
+                                    <label text="${cust.customerName ?: cust.ecommerceCustomerId}" style="font-weight:500"/>
+                                    <label text="订单 ${cust.orderCount ?: 0} · 金额 ${cust.totalAmount ? ec.l10n.formatCurrency(cust.totalAmount, 'CNY') : '—'}"
+                                           style="display:block;color:#616161"/>
+                                </container>
+                            </widgets>
+                        </section-iterate>
+                    </if>
+                    <if condition="!topCustomers">
+                        <label text="暂无客户统计" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                    </if>
+                </container>
+            </row-col>
+        </container-row>
+
+        <container style="border:1px dashed #bdbdbd;border-radius:6px;padding:16px;background:#fafafa;">
+            <label text="Telegram 联动提示" style="font-weight:500;margin-bottom:8px;display:block"/>
+            <label text="• 商品录入：/product add name=示例价格=199 stock=50" style="display:block;color:#616161"/>
+            <label text="• 订单创建：/order create customer=EC_CUST_001 items=ECP1001:1,ECP1004:2" style="display:block;color:#616161"/>
+            <label text="• 智能推荐：点击菜单“🎯 智能推荐”或直接输入需求" style="display:block;color:#616161"/>
+            <label text="• 若要跟进项目执行，请转至“蜂巢项目管理”模块或使用 /project 指令" style="display:block;color:#616161"/>
+        </container>
+
+        </container>
+    </widgets>
+</screen>

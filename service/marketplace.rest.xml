@@ -162,6 +162,9 @@
         </resource>
 
         <resource name="orders">
+            <method type="get">
+                <service name="marketplace.EcommerceServices.get#OrderList"/>
+            </method>
             <method type="post">
                 <service name="marketplace.ecommerce.create#Order"/>
             </method>
@@ -189,6 +192,110 @@
         <resource name="recommendations">
             <method type="get">
                 <entity name="marketplace.ecommerce.EcommerceProduct" operation="list"/>
+            </method>
+        </resource>
+    </resource>
+
+    <!-- 建筑工程管理 -->
+    <resource name="construction">
+        <!-- 建筑工程需求管理 -->
+        <resource name="demand">
+            <method type="post">
+                <service name="marketplace.ConstructionServices.create#ConstructionDemand"/>
+            </method>
+            <method type="get">
+                <entity name="marketplace.construction.ConstructionDemand" operation="list"/>
+            </method>
+
+            <resource name="{demandId}">
+                <method type="get">
+                    <entity name="marketplace.construction.ConstructionDemand" operation="one"/>
+                </method>
+                <method type="put">
+                    <service name="store#marketplace.construction.ConstructionDemand"/>
+                </method>
+                <method type="delete">
+                    <service name="delete#marketplace.construction.ConstructionDemand"/>
+                </method>
+            </resource>
+        </resource>
+
+        <!-- 建筑工程服务供应管理 -->
+        <resource name="supply">
+            <method type="post">
+                <service name="marketplace.ConstructionServices.create#ConstructionSupply"/>
+            </method>
+            <method type="get">
+                <entity name="marketplace.construction.ConstructionSupply" operation="list"/>
+            </method>
+
+            <resource name="{supplyId}">
+                <method type="get">
+                    <entity name="marketplace.construction.ConstructionSupply" operation="one"/>
+                </method>
+                <method type="put">
+                    <service name="store#marketplace.construction.ConstructionSupply"/>
+                </method>
+                <method type="delete">
+                    <service name="delete#marketplace.construction.ConstructionSupply"/>
+                </method>
+            </resource>
+        </resource>
+
+        <!-- 建筑工程智能匹配 -->
+        <resource name="matches">
+            <method type="get">
+                <service name="marketplace.ConstructionServices.find#ConstructionMatches"/>
+            </method>
+            <method type="post">
+                <service name="marketplace.ConstructionServices.find#ConstructionMatches"/>
+            </method>
+        </resource>
+
+        <!-- 建筑工程分类信息 -->
+        <resource name="categories">
+            <method type="get">
+                <service name="marketplace.ConstructionServices.get#ConstructionCategories"/>
+            </method>
+        </resource>
+
+        <!-- 建筑工程评价管理 -->
+        <resource name="reviews">
+            <method type="post">
+                <service name="create#marketplace.construction.ConstructionReview"/>
+            </method>
+            <method type="get">
+                <entity name="marketplace.construction.ConstructionReview" operation="list"/>
+            </method>
+
+            <resource name="{reviewId}">
+                <method type="get">
+                    <entity name="marketplace.construction.ConstructionReview" operation="one"/>
+                </method>
+                <method type="put">
+                    <service name="store#marketplace.construction.ConstructionReview"/>
+                </method>
+            </resource>
+        </resource>
+
+        <!-- 建筑工程统计信息 -->
+        <resource name="stats">
+            <method type="get">
+                <service name="marketplace.ConstructionServices.get#ConstructionStats"/>
+            </method>
+        </resource>
+
+        <!-- 建筑工程统计信息 v2.0（标准化响应格式） -->
+        <resource name="stats-v2">
+            <method type="get">
+                <service name="marketplace.ConstructionServices.get#ConstructionStatsV2"/>
+            </method>
+        </resource>
+
+        <!-- 建筑工程演示数据初始化 -->
+        <resource name="demo-data">
+            <method type="post">
+                <service name="marketplace.ConstructionServices.initialize#ConstructionDemoData"/>
             </method>
         </resource>
     </resource>

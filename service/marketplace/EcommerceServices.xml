@@ -119,36 +119,82 @@
             ecommerceOrderId = ec.entity.sequencedIdPrimary
             BigDecimal total = BigDecimal.ZERO
             List<Map> seqItems = []
+            List<Map> inventoryAdjustments = []
             orderItems.eachWithIndex { Map item, int idx ->
-                BigDecimal qty = new BigDecimal(item.quantity ?: "1")
-                BigDecimal price = new BigDecimal(item.unitPrice ?: "0")
+                String productId = item.ecommerceProductId ?: item.productId
+                if (!productId) {
+                    ec.message.addError("订单第 ${idx + 1} 项缺少商品ID")
+                    return
+                }
+                def productValue = ec.entity.find("marketplace.ecommerce.EcommerceProduct")
+                        .condition("ecommerceProductId", productId)
+                        .disableAuthz()
+                        .one()
+                if (!productValue) {
+                    ec.message.addError("商品 ${productId} 不存在")
+                    return
+                }
+                BigDecimal qty = item.quantity instanceof BigDecimal ? (BigDecimal) item.quantity :
+                        new BigDecimal(item.quantity ?: "1")
+                if (qty.compareTo(BigDecimal.ZERO) <= 0) {
+                    ec.message.addError("商品 ${productValue.productName ?: productId} 数量需大于 0")
+                    return
+                }
+                Long available = productValue.stockQuantity instanceof Number ?
+                        ((Number) productValue.stockQuantity).longValue() :
+                        (productValue.stockQuantity?.toString()?.toLong() ?: 0L)
+                if (available < qty.longValue()) {
+                    ec.message.addError("商品 ${productValue.productName ?: productId} 库存不足（剩余 ${available}）")
+                    return
+                }
+                BigDecimal price
+                if (item.unitPrice != null) {
+                    price = item.unitPrice instanceof BigDecimal ? (BigDecimal) item.unitPrice :
+                            new BigDecimal(item.unitPrice.toString())
+                } else if (productValue.price instanceof BigDecimal) {
+                    price = (BigDecimal) productValue.price
+                } else if (productValue.price != null) {
+                    price = new BigDecimal(productValue.price.toString())
+                } else {
+                    price = BigDecimal.ZERO
+                }
                 BigDecimal lineTotal = qty.multiply(price)
                 total = total.add(lineTotal)
                 seqItems << [
                         orderItemSeqId    : String.format("%05d", idx + 1),
                         ecommerceOrderId  : ecommerceOrderId,
-                        ecommerceProductId: item.ecommerceProductId,
+                        ecommerceProductId: productId,
                         quantity          : qty.intValue(),
                         unitPrice         : price,
                         itemTotal         : lineTotal
                 ]
+                inventoryAdjustments << [productId: productId, qty: qty.longValue()]
             }
+            if (ec.message.hasError()) return
+
             Timestamp nowTs = ec.user.nowTimestamp
             ec.service.sync().name("create#marketplace.ecommerce.EcommerceOrder").parameters([
-                    ecommerceOrderId : ecommerceOrderId,
+                    ecommerceOrderId   : ecommerceOrderId,
                     ecommerceCustomerId: ecommerceCustomerId,
-                    cartId          : cartId,
-                    orderStatus     : "CREATED",
-                    orderTotal      : total,
-                    shippingAddress : shippingAddress,
-                    createdDate     : nowTs,
-                    createdByUserId : ec.user.userId,
-                    lastUpdatedDate : nowTs
+                    cartId             : cartId,
+                    orderStatus        : "CREATED",
+                    orderTotal         : total,
+                    shippingAddress    : shippingAddress,
+                    createdDate        : nowTs,
+                    createdByUserId    : ec.user.userId,
+                    lastUpdatedDate    : nowTs
             ]).call()
             seqItems.each { Map oi ->
                 ec.service.sync().name("create#marketplace.ecommerce.EcommerceOrderItem").parameters(
                         oi + [createdDate: nowTs, createdByUserId: ec.user.userId, lastUpdatedDate: nowTs]).call()
             }
+            inventoryAdjustments.each { Map adj ->
+                ec.service.sync().name("marketplace.EcommerceServices.update#ProductInventory").parameters([
+                        ecommerceProductId: adj.productId,
+                        quantityAdjustment: -adj.qty
+                ]).call()
+            }
+            if (ec.message.hasError()) return
             orderTotal = total
         ]]></script></actions>
     </service>
@@ -213,10 +259,23 @@
                 return
             }
             if (stockQuantity != null) {
-                value.set("stockQuantity", stockQuantity)
+                Long target = stockQuantity instanceof Number ? ((Number) stockQuantity).longValue() :
+                        stockQuantity.toString().toLong()
+                if (target < 0L) {
+                    ec.message.addError("库存数量不能为负数")
+                    return
+                }
+                value.set("stockQuantity", target)
             } else if (quantityAdjustment != null) {
                 Long current = value.getLong("stockQuantity") ?: 0L
-                value.set("stockQuantity", current + quantityAdjustment)
+                Long adjustment = quantityAdjustment instanceof Number ? ((Number) quantityAdjustment).longValue() :
+                        quantityAdjustment.toString().toLong()
+                Long newQty = current + adjustment
+                if (newQty < 0L) {
+                    ec.message.addError("商品 ${value.productName ?: ecommerceProductId} 库存不足（当前 ${current}）")
+                    return
+                }
+                value.set("stockQuantity", newQty)
             }
             value.set("lastUpdatedDate", ec.user.nowTimestamp)
             value.store()
@@ -241,27 +300,143 @@
     </service>
 
     <service verb="get" noun="ProductRecommendations" authenticate="true">
-        <description>获取推荐商品列表（占位实现）</description>
+        <description>根据评价与销量生成智能推荐列表</description>
         <in-parameters>
             <parameter name="ecommerceCustomerId"/>
+            <parameter name="intentType"/>
+            <parameter name="preferredCategoryId"/>
             <parameter name="limit" type="Integer" default="5"/>
         </in-parameters>
         <out-parameters>
             <parameter name="recommendations" type="List"/>
         </out-parameters>
         <actions><script><![CDATA[
-            def find = ec.entity.find("marketplace.ecommerce.EcommerceProduct")
+            import java.math.BigDecimal
+            import java.math.RoundingMode
+
+            int maxResults = Math.max(1, Math.min((limit ?: 5) as int, 20))
+            def productFind = ec.entity.find("marketplace.ecommerce.EcommerceProduct")
                     .condition("status", "ACTIVE")
-                    .orderBy("-lastUpdatedDate")
-                    .limit((limit ?: 5) as int)
-            recommendations = find.list().collect {
-                [
-                        ecommerceProductId: it.ecommerceProductId,
-                        productName       : it.productName,
-                        price             : it.price,
-                        stockQuantity     : it.stockQuantity
+            if (preferredCategoryId) productFind.condition("productCategoryId", preferredCategoryId)
+            def productList = productFind.list()
+            if (!productList || productList.isEmpty()) {
+                recommendations = []
+                return
+            }
+
+            Map<String, Map> ratingAgg = [:]
+            def reviewList = ec.entity.find("marketplace.ecommerce.EcommerceProductReview")
+                    .condition("status", "ACTIVE")
+                    .list()
+            reviewList?.each { reviewVal ->
+                String pid = reviewVal.ecommerceProductId
+                if (!pid) return
+                BigDecimal rating = reviewVal.rating instanceof BigDecimal ?
+                        (BigDecimal) reviewVal.rating :
+                        (reviewVal.rating ? new BigDecimal(reviewVal.rating.toString()) : BigDecimal.ZERO)
+                Map agg = ratingAgg.get(pid) ?: [total: BigDecimal.ZERO, count: 0]
+                agg.total = agg.total.add(rating ?: BigDecimal.ZERO)
+                agg.count = agg.count + (rating ? 1 : 0)
+                ratingAgg[pid] = agg
+            }
+
+            Map<String, Long> orderAgg = [:]
+            def orderItems = ec.entity.find("marketplace.ecommerce.EcommerceOrderItem").list()
+            orderItems?.each { itemVal ->
+                String pid = itemVal.ecommerceProductId
+                if (!pid) return
+                Long qty = itemVal.quantity instanceof Number ?
+                        ((Number) itemVal.quantity).longValue() :
+                        (itemVal.quantity?.toString()?.toLong() ?: 0L)
+                orderAgg[pid] = (orderAgg[pid] ?: 0L) + (qty ?: 0L)
+            }
+
+            long maxOrderQty = orderAgg.values()?.max() ?: 0L
+            BigDecimal ratingWeight
+            BigDecimal salesWeight
+            String normalizedIntent = intentType?.toUpperCase()
+            switch (normalizedIntent) {
+                case "B2B_PURCHASE":
+                    ratingWeight = new BigDecimal("0.4")
+                    salesWeight = new BigDecimal("0.6")
+                    break
+                case "PROJECT_EXPANSION":
+                    ratingWeight = new BigDecimal("0.6")
+                    salesWeight = new BigDecimal("0.4")
+                    break
+                case "SOCIAL_RETAIL":
+                    ratingWeight = new BigDecimal("0.7")
+                    salesWeight = new BigDecimal("0.3")
+                    break
+                default:
+                    ratingWeight = new BigDecimal("0.55")
+                    salesWeight = new BigDecimal("0.45")
+                    break
+            }
+
+            List<Map> computed = []
+            productList.each { prodVal ->
+                String pid = prodVal.ecommerceProductId
+                Map ratingStat = ratingAgg[pid] ?: [total: BigDecimal.ZERO, count: 0]
+                BigDecimal avgRating = BigDecimal.ZERO
+                if (ratingStat.count) {
+                    avgRating = ratingStat.total.divide(new BigDecimal(ratingStat.count), 4, RoundingMode.HALF_UP)
+                }
+                BigDecimal ratingScore = avgRating.compareTo(BigDecimal.ZERO) > 0 ?
+                        avgRating.divide(new BigDecimal("5"), 4, RoundingMode.HALF_UP) : BigDecimal.ZERO
+                Long orderQty = orderAgg[pid] ?: 0L
+                BigDecimal orderScore = (maxOrderQty > 0 && orderQty > 0) ?
+                        new BigDecimal(orderQty).divide(new BigDecimal(maxOrderQty), 4, RoundingMode.HALF_UP) :
+                        BigDecimal.ZERO
+                BigDecimal compositeScore = ratingScore.multiply(ratingWeight)
+                        .add(orderScore.multiply(salesWeight))
+                        .setScale(4, RoundingMode.HALF_UP)
+
+                String source = "综合推荐"
+                if (orderScore.compareTo(ratingScore) > 0 && orderQty > 0) {
+                    source = normalizedIntent == "B2B_PURCHASE" ? "B端热销" : "订单热度"
+                } else if (ratingStat.count) {
+                    source = normalizedIntent == "PROJECT_EXPANSION" ? "项目口碑" : "客户评价"
+                }
+
+                computed << [
+                        ecommerceProductId   : pid,
+                        productName          : prodVal.productName,
+                        productCategoryId    : prodVal.productCategoryId,
+                        price                : prodVal.price,
+                        stockQuantity        : prodVal.stockQuantity,
+                        avgRating            : avgRating,
+                        reviewCount          : ratingStat.count,
+                        orderCount           : orderQty,
+                        recommendationScore  : compositeScore,
+                        recommendationSource : source
                 ]
             }
+
+            recommendations = computed.sort { Map a, Map b ->
+                b.recommendationScore <=> a.recommendationScore
+            }.take(Math.min(maxResults, computed.size()))
+        ]]></script></actions>
+    </service>
+
+    <service verb="get" noun="OrderList" authenticate="true">
+        <description>查询订单列表</description>
+        <in-parameters>
+            <parameter name="ecommerceCustomerId"/>
+            <parameter name="orderStatus"/>
+            <parameter name="limit" type="Integer" default="20"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="orders" type="List"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            def find = ec.entity.find("marketplace.ecommerce.EcommerceOrder")
+                    .orderBy("-createdDate")
+                    .limit(Math.max(1, Math.min((limit ?: 20) as int, 50)))
+            if (ecommerceCustomerId) find.condition("ecommerceCustomerId", ecommerceCustomerId)
+            if (orderStatus) find.condition("orderStatus", orderStatus.toString().toUpperCase())
+            def list = find.list()
+            orders = list ? list.collect { it.getMap(false) } : []
         ]]></script></actions>
     </service>
 

@@ -10,6 +10,10 @@
         <subscreens-item name="Dashboard" menu-title="控制台"
                          location="component://moqui-marketplace/screen/marketplace/Dashboard.xml"/>
 
+        <!-- 电商模块专用面板 -->
+        <subscreens-item name="Ecommerce" menu-title="电商控制台"
+                         location="component://moqui-marketplace/screen/marketplace/Ecommerce.xml"/>
+
         <!-- 管理功能：系统配置 (仅开发/管理员可见) -->
         <subscreens-item name="SystemConfig" menu-title="系统配置" menu-include="false"
                          location="component://moqui-marketplace/screen/marketplace/SystemConfig.xml"/>
@@ -34,6 +38,7 @@
     <widgets>
         <container style="margin-bottom:16px;">
             <link url="Dashboard" text="控制台" btn-type="primary" btn-size="sm"/>
+            <link url="Ecommerce" text="电商控制台" btn-type="default" btn-size="sm" style="margin-left:8px;"/>
             <link url="SystemConfig" text="系统配置" btn-type="default" btn-size="sm" style="margin-left:8px;"/>
         </container>
         <subscreens-active/>
