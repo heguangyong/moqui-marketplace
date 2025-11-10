@@ -92,9 +92,9 @@
             </row-col>
             <row-col lg="4" md="12" sm="12">
                 <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
-                    <label text="📁 测试脚本 & REST 示例" style="font-size:1.25rem;font-weight:500"/>
+                    <label text="📁 测试脚本 &amp; REST 示例" style="font-size:1.25rem;font-weight:500"/>
                     <label text="testing-tools/ecommerce_order_rest_examples.sh" style="display:block;margin-top:8px;color:#616161"/>
-                    <label text="环境变量: BASE_URL=http://localhost:8080 TOKEN=<JWT>" style="display:block;margin-top:4px;color:#9e9e9e"/>
+                    <label text="环境变量: BASE_URL=http://localhost:8080 TOKEN=&lt;JWT&gt;" style="display:block;margin-top:4px;color:#9e9e9e"/>
                     <label text="RUN: ./testing-tools/ecommerce_order_rest_examples.sh" style="display:block;margin-top:4px;color:#9e9e9e"/>
                     <label text="输出: 订单创建→订单列表→状态查询" style="display:block;margin-top:4px;color:#616161"/>
                 </container>
