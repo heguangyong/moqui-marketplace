@@ -11,7 +11,7 @@
                          location="component://moqui-marketplace/screen/marketplace/Dashboard.xml"/>
 
         <!-- 电商模块专用面板 -->
-        <subscreens-item name="Ecommerce" menu-title="电商控制台"
+        <subscreens-item name="Ecommerce" menu-title="电商控制台" menu-include="false"
                          location="component://moqui-marketplace/screen/marketplace/Ecommerce.xml"/>
 
         <!-- 管理功能：系统配置 (仅开发/管理员可见) -->
