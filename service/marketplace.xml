@@ -374,4 +374,54 @@
         </actions>
     </service>
 
+    <!-- ==================== HiveMind Webhook 服务 ==================== -->
+    <service verb="handle" noun="HiveMindWebhook" authenticate="false" allow-remote="true">
+        <description>接收HiveMind推送的项目/任务更新并触发同步与提醒</description>
+        <in-parameters>
+            <parameter name="notificationType" required="true">
+                <description>PROJECT_STATUS、TASK_STATUS、TASK_CREATED等</description>
+            </parameter>
+            <parameter name="payload" type="Map" required="true"/>
+            <parameter name="signature">
+                <description>可选：HiveMind侧签名，用于验证来源</description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="processed" type="Boolean"/>
+        </out-parameters>
+        <actions><script><![CDATA[
+            import groovy.json.JsonOutput
+            import java.security.MessageDigest
+
+            String sharedSecret = System.getProperty("hivemind.webhook.secret") ?:
+                    System.getenv("HIVEMIND_WEBHOOK_SECRET") ?:
+                    ec.ecfi.getConfValue("hivemind.webhook.secret")
+            if (sharedSecret) {
+                if (!signature) {
+                    ec.logger.warn("收到HiveMind Webhook但缺少signature")
+                } else {
+                    String computed = MessageDigest.getInstance("SHA-256")
+                            .digest((JsonOutput.toJson(payload) + sharedSecret).getBytes("UTF-8"))
+                            .encodeHex().toString()
+                    if (!computed.equalsIgnoreCase(signature)) {
+                        ec.message.addError("Webhook签名验证失败")
+                        processed = false
+                        return
+                    }
+                }
+            }
+
+            String projectId = payload.projectId ?: payload.workEffortId ?: payload.listingId
+            if (!projectId) {
+                ec.message.addError("Webhook缺少projectId")
+                processed = false
+                return
+            }
+
+            // Log successful webhook processing
+            ec.logger.info("已处理HiveMind webhook: ${notificationType} -> ${projectId}")
+            processed = true
+        ]]></script></actions>
+    </service>
+
 </services>

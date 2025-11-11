@@ -189,7 +189,7 @@ Map confirmMatch() {
     }
 
     // 获取匹配记录
-    EntityValue match = ec.entity.find("marketplace.matching.Match")
+    EntityValue match = ec.entity.find("marketplace.match.Match")
         .condition("matchId", matchId)
         .one()
 
@@ -332,10 +332,10 @@ Map rebuildUserProfile() {
         .condition("publisherId", partyId)
         .count()
 
-    Long totalMatches = ec.entity.find("marketplace.matching.Match")
+    Long totalMatches = ec.entity.find("marketplace.match.Match")
         .condition("supplyListingId", partyId)
         .count() +
-        ec.entity.find("marketplace.matching.Match")
+        ec.entity.find("marketplace.match.Match")
         .condition("demandListingId", partyId)
         .count()
 
@@ -395,7 +395,7 @@ Map getMarketplaceStats() {
         .count()
 
     // 总匹配数
-    Long totalMatches = ec.entity.find("marketplace.matching.Match").count()
+    Long totalMatches = ec.entity.find("marketplace.match.Match").count()
 
     // 今日新增
     Timestamp todayStart = new Timestamp(System.currentTimeMillis() -

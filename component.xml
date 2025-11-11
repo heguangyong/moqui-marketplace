@@ -17,12 +17,14 @@
     <service-include location="component://moqui-marketplace/service/marketplace/MarketplaceServices.xml"/>
     <service-include location="component://moqui-marketplace/service/marketplace/ProjectServices.xml"/>
     <service-include location="component://moqui-marketplace/service/marketplace/EcommerceServices.xml"/>
+    <service-include location="component://moqui-marketplace/service/marketplace/ConstructionServices.xml"/>
     <service-include location="component://moqui-marketplace/service/marketplace/HiveMindWebhookServices.xml"/>
     <service-include location="component://moqui-marketplace/service/marketplace/MatchingServices.xml"/>
     <service-include location="component://moqui-marketplace/service/marketplace/ProfileServices.xml"/>
     <service-include location="component://moqui-marketplace/service/marketplace/NotificationServices.xml"/>
     <service-include location="component://moqui-marketplace/service/marketplace/TagServices.xml"/>
     <service-include location="component://moqui-marketplace/service/marketplace/SupplyDemandServices.xml"/>
+    <service-include location="component://moqui-marketplace/service/marketplace/ApiResponseServices.xml"/>
 
     <!-- REST API 资源定义 -->
     <webapp-list>

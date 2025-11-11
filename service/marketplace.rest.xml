@@ -43,7 +43,7 @@
 
         <resource name="{matchId}">
             <method type="get">
-                <entity name="marketplace.matching.Match" operation="one"/>
+                <entity name="marketplace.match.Match" operation="one"/>
             </method>
         </resource>
     </resource>
@@ -149,11 +149,11 @@
                 <entity name="marketplace.ecommerce.EcommerceProduct" operation="list"/>
             </method>
             <method type="post">
-                <service name="create#marketplace.ecommerce.EcommerceProduct"/>
+                <service name="marketplace.EcommerceServices.create#Product"/>
             </method>
             <resource name="{ecommerceProductId}">
                 <method type="put">
-                    <service name="store#marketplace.ecommerce.EcommerceProduct"/>
+                    <service name="marketplace.EcommerceServices.update#Product"/>
                 </method>
                 <method type="get">
                     <entity name="marketplace.ecommerce.EcommerceProduct" operation="one"/>
@@ -166,7 +166,7 @@
                 <service name="marketplace.EcommerceServices.get#OrderList"/>
             </method>
             <method type="post">
-                <service name="marketplace.ecommerce.create#Order"/>
+                <service name="marketplace.EcommerceServices.create#Order"/>
             </method>
             <resource name="{ecommerceOrderId}">
                 <method type="get">
@@ -212,10 +212,10 @@
                     <entity name="marketplace.construction.ConstructionDemand" operation="one"/>
                 </method>
                 <method type="put">
-                    <service name="store#marketplace.construction.ConstructionDemand"/>
+                    <entity name="marketplace.construction.ConstructionDemand" operation="store"/>
                 </method>
                 <method type="delete">
-                    <service name="delete#marketplace.construction.ConstructionDemand"/>
+                    <entity name="marketplace.construction.ConstructionDemand" operation="delete"/>
                 </method>
             </resource>
         </resource>
@@ -234,10 +234,10 @@
                     <entity name="marketplace.construction.ConstructionSupply" operation="one"/>
                 </method>
                 <method type="put">
-                    <service name="store#marketplace.construction.ConstructionSupply"/>
+                    <entity name="marketplace.construction.ConstructionSupply" operation="store"/>
                 </method>
                 <method type="delete">
-                    <service name="delete#marketplace.construction.ConstructionSupply"/>
+                    <entity name="marketplace.construction.ConstructionSupply" operation="delete"/>
                 </method>
             </resource>
         </resource>
@@ -262,7 +262,7 @@
         <!-- 建筑工程评价管理 -->
         <resource name="reviews">
             <method type="post">
-                <service name="create#marketplace.construction.ConstructionReview"/>
+                <entity name="marketplace.construction.ConstructionReview" operation="create"/>
             </method>
             <method type="get">
                 <entity name="marketplace.construction.ConstructionReview" operation="list"/>
@@ -273,7 +273,7 @@
                     <entity name="marketplace.construction.ConstructionReview" operation="one"/>
                 </method>
                 <method type="put">
-                    <service name="store#marketplace.construction.ConstructionReview"/>
+                    <entity name="marketplace.construction.ConstructionReview" operation="store"/>
                 </method>
             </resource>
         </resource>

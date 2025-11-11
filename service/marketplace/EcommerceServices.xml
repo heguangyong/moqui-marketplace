@@ -22,8 +22,23 @@
             <set field="createdDate" from="ec.user.nowTimestamp"/>
             <set field="createdByUserId" from="ec.user.userId"/>
             <set field="lastUpdatedDate" from="createdDate"/>
-            <service-call name="create#marketplace.ecommerce.EcommerceProduct"
-                          in-map="context + [ecommerceProductId:ecommerceProductId]"/>
+
+            <!-- Create product directly instead of using implicit service -->
+            <script><![CDATA[
+                ec.entity.makeValue("marketplace.ecommerce.EcommerceProduct", [
+                    ecommerceProductId: ecommerceProductId,
+                    productName: productName,
+                    productCategoryId: productCategoryId,
+                    price: price,
+                    stockQuantity: stockQuantity,
+                    status: status,
+                    description: description,
+                    imageUrl: imageUrl,
+                    createdDate: createdDate,
+                    createdByUserId: createdByUserId,
+                    lastUpdatedDate: lastUpdatedDate
+                ]).createOrUpdate()
+            ]]></script>
         </actions>
     </service>
 
@@ -40,7 +55,30 @@
         </in-parameters>
         <actions>
             <set field="lastUpdatedDate" from="ec.user.nowTimestamp"/>
-            <service-call name="update#marketplace.ecommerce.EcommerceProduct" in-map="context"/>
+
+            <!-- Update product directly instead of using implicit service -->
+            <script><![CDATA[
+                def productValue = ec.entity.find("marketplace.ecommerce.EcommerceProduct")
+                    .condition("ecommerceProductId", ecommerceProductId)
+                    .forUpdate(true)
+                    .one()
+
+                if (!productValue) {
+                    ec.message.addError("Product not found: ${ecommerceProductId}")
+                    return
+                }
+
+                if (productName) productValue.productName = productName
+                if (productCategoryId) productValue.productCategoryId = productCategoryId
+                if (price != null) productValue.price = price
+                if (stockQuantity != null) productValue.stockQuantity = stockQuantity
+                if (status) productValue.status = status
+                if (description) productValue.description = description
+                if (imageUrl) productValue.imageUrl = imageUrl
+                productValue.lastUpdatedDate = lastUpdatedDate
+
+                productValue.update()
+            ]]></script>
         </actions>
     </service>
 
@@ -173,20 +211,25 @@
             if (ec.message.hasError()) return
 
             Timestamp nowTs = ec.user.nowTimestamp
-            ec.service.sync().name("create#marketplace.ecommerce.EcommerceOrder").parameters([
-                    ecommerceOrderId   : ecommerceOrderId,
-                    ecommerceCustomerId: ecommerceCustomerId,
-                    cartId             : cartId,
-                    orderStatus        : "CREATED",
-                    orderTotal         : total,
-                    shippingAddress    : shippingAddress,
-                    createdDate        : nowTs,
-                    createdByUserId    : ec.user.userId,
-                    lastUpdatedDate    : nowTs
-            ]).call()
+
+            // Create order directly instead of using implicit service
+            ec.entity.makeValue("marketplace.ecommerce.EcommerceOrder", [
+                ecommerceOrderId   : ecommerceOrderId,
+                ecommerceCustomerId: ecommerceCustomerId,
+                cartId             : cartId,
+                orderStatus        : "CREATED",
+                orderTotal         : total,
+                shippingAddress    : shippingAddress,
+                createdDate        : nowTs,
+                createdByUserId    : ec.user.userId,
+                lastUpdatedDate    : nowTs
+            ]).createOrUpdate()
+
+            // Create order items directly instead of using implicit service
             seqItems.each { Map oi ->
-                ec.service.sync().name("create#marketplace.ecommerce.EcommerceOrderItem").parameters(
-                        oi + [createdDate: nowTs, createdByUserId: ec.user.userId, lastUpdatedDate: nowTs]).call()
+                ec.entity.makeValue("marketplace.ecommerce.EcommerceOrderItem",
+                    oi + [createdDate: nowTs, createdByUserId: ec.user.userId, lastUpdatedDate: nowTs]
+                ).createOrUpdate()
             }
             inventoryAdjustments.each { Map adj ->
                 ec.service.sync().name("marketplace.EcommerceServices.update#ProductInventory").parameters([
@@ -209,7 +252,7 @@
             <parameter name="order"/>
         </out-parameters>
         <actions>
-            <set field="order" from="ec.entity.find(\"marketplace.ecommerce.EcommerceOrder\").condition(\"ecommerceOrderId\", ecommerceOrderId).one()"/>
+            <set field="order" from="ec.entity.find('marketplace.ecommerce.EcommerceOrder').condition('ecommerceOrderId', ecommerceOrderId).one()"/>
             <if condition="!order">
                 <set field="orderStatus" value="NOT_FOUND"/>
                 <return/>
@@ -291,7 +334,7 @@
             <parameter name="inventoryInfo" type="Map"/>
         </out-parameters>
         <actions>
-            <set field="inventoryInfo" from="ec.entity.find(\"marketplace.ecommerce.EcommerceProduct\").condition(\"ecommerceProductId\", ecommerceProductId).one()?.getMap()"/>
+            <set field="inventoryInfo" from="ec.entity.find('marketplace.ecommerce.EcommerceProduct').condition('ecommerceProductId', ecommerceProductId).one()?.getMap()"/>
             <if condition="!inventoryInfo">
                 <set field="inventoryInfo" value="[:]"/>
                 <set field="inventoryInfo.message" value="商品不存在"/>
@@ -438,6 +481,64 @@
             def list = find.list()
             orders = list ? list.collect { it.getMap(false) } : []
         ]]></script></actions>
+    </service>
+
+    <!-- Automatic service for Swagger REST API -->
+    <service name="create#marketplace.ecommerce.EcommerceProduct" authenticate="false" allow-remote="true">
+        <description>Create ecommerce product - automatic service for REST API</description>
+        <in-parameters>
+            <parameter name="productName" required="true"/>
+            <parameter name="productCategoryId"/>
+            <parameter name="price" type="BigDecimal" default-value="0.00"/>
+            <parameter name="stockQuantity" type="Long" default-value="0"/>
+            <parameter name="status" default-value="ACTIVE"/>
+            <parameter name="description"/>
+            <parameter name="imageUrl"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="ecommerceProductId"/>
+        </out-parameters>
+        <actions>
+            <!-- Delegate to the actual service -->
+            <service-call name="marketplace.EcommerceServices.create#Product" in-map="context" out-map="context"/>
+        </actions>
+    </service>
+
+    <!-- Construction services - added here temporarily for Swagger generation -->
+    <service name="store#marketplace.construction.ConstructionDemand" authenticate="false" allow-remote="true">
+        <description>Store construction demand - automatic service for REST API</description>
+        <in-parameters>
+            <parameter name="demandId"/>
+            <parameter name="listingId"/>
+            <parameter name="projectType"/>
+            <parameter name="propertyType"/>
+            <parameter name="area" type="BigDecimal"/>
+            <parameter name="budget" type="BigDecimal"/>
+            <parameter name="urgency"/>
+            <parameter name="preferredStartDate" type="Timestamp"/>
+            <parameter name="estimatedDuration" type="Integer"/>
+            <parameter name="specialRequirements"/>
+            <parameter name="hasDesignDraft"/>
+            <parameter name="environmentalRequirements"/>
+            <parameter name="contactPreference"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="demandId"/>
+        </out-parameters>
+        <actions>
+            <!-- This is an automatic entity store service -->
+            <entity-find-one entity-name="marketplace.construction.ConstructionDemand" value-field="demand">
+                <field-map field-name="demandId"/>
+            </entity-find-one>
+            <if condition="demand">
+                <!-- Update existing -->
+                <entity-update value-field="demand"/>
+            <else>
+                <!-- Create new -->
+                <entity-create entity-name="marketplace.construction.ConstructionDemand"/>
+            </else>
+            </if>
+        </actions>
     </service>
 
 </services>

@@ -4,6 +4,43 @@
 
     <!-- ==================== 建筑工程专用服务 ==================== -->
 
+    <!-- Automatic service for Swagger REST API -->
+    <service name="store#marketplace.construction.ConstructionDemand" authenticate="false" allow-remote="true">
+        <description>Store construction demand - automatic service for REST API</description>
+        <in-parameters>
+            <parameter name="demandId"/>
+            <parameter name="listingId"/>
+            <parameter name="projectType"/>
+            <parameter name="propertyType"/>
+            <parameter name="area" type="BigDecimal"/>
+            <parameter name="budget" type="BigDecimal"/>
+            <parameter name="urgency"/>
+            <parameter name="preferredStartDate" type="Timestamp"/>
+            <parameter name="estimatedDuration" type="Integer"/>
+            <parameter name="specialRequirements"/>
+            <parameter name="hasDesignDraft"/>
+            <parameter name="environmentalRequirements"/>
+            <parameter name="contactPreference"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="demandId"/>
+        </out-parameters>
+        <actions>
+            <!-- This is an automatic entity store service -->
+            <entity-find-one entity-name="marketplace.construction.ConstructionDemand" value-field="demand">
+                <field-map field-name="demandId"/>
+            </entity-find-one>
+            <if condition="demand">
+                <!-- Update existing -->
+                <entity-update value-field="demand"/>
+            <else>
+                <!-- Create new -->
+                <entity-create entity-name="marketplace.construction.ConstructionDemand"/>
+            </else>
+            </if>
+        </actions>
+    </service>
+
     <service verb="create" noun="ConstructionDemand" authenticate="false" allow-remote="true">
         <description>创建建筑工程需求</description>
         <in-parameters>

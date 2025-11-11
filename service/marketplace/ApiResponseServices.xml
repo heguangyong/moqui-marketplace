@@ -3,7 +3,7 @@
 
     <!-- ==================== 统一REST API响应包装服务 ==================== -->
 
-    <service verb="wrap" noun="ApiResponse" authenticate="false" allow-remote="false">
+    <service verb="wrap" noun="ApiResponse" authenticate="false" allow-remote="true">
         <description>统一REST API响应格式包装服务</description>
         <in-parameters>
             <parameter name="data" type="Object" required="false">
@@ -108,7 +108,7 @@
         </actions>
     </service>
 
-    <service verb="wrap" noun="ListResponse" authenticate="false" allow-remote="false">
+    <service verb="wrap" noun="ListResponse" authenticate="false" allow-remote="true">
         <description>列表数据响应包装</description>
         <in-parameters>
             <parameter name="items" type="List" required="true">
@@ -161,7 +161,7 @@
         </actions>
     </service>
 
-    <service verb="wrap" noun="ErrorResponse" authenticate="false" allow-remote="false">
+    <service verb="wrap" noun="ErrorResponse" authenticate="false" allow-remote="true">
         <description>错误响应包装</description>
         <in-parameters>
             <parameter name="errorMessage" type="String" required="true">
@@ -213,7 +213,7 @@
         </actions>
     </service>
 
-    <service verb="wrap" noun="SuccessResponse" authenticate="false" allow-remote="false">
+    <service verb="wrap" noun="SuccessResponse" authenticate="false" allow-remote="true">
         <description>成功响应包装</description>
         <in-parameters>
             <parameter name="data" type="Object" required="false">
