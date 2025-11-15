@@ -10,106 +10,175 @@
     </always-actions>
 
     <widgets>
-        <container style="margin-bottom:16px;border:1px solid #e0e0e0;border-radius:4px;padding:16px;">
-            <label text="系统配置中心" style="font-size:2rem;font-weight:bold;color:#1976d2;display:block"/>
-            <label text="聚焦 Telegram · AI · 数据工具 · 集成健康" style="color:#616161;display:block;margin-top:4px"/>
+        <!-- 页面标题区域 -->
+        <container style="q-pa-md">
+            <container style="q-mb-md">
+                <label text="⚙️ 系统配置中心" type="h4"/>
+                <label text="聚焦 Telegram · AI · 数据工具 · 集成健康" style="color: #666; font-size: 14px;"/>
+            </container>
+
+            <!-- 配置工具卡片 -->
+            <container style="q-mb-md">
+                <label text="🔧 配置工具" type="h5" style="q-mb-sm"/>
+                <container style="row q-gutter-md">
+                    <container style="col q-card q-pa-md">
+                        <container style="q-card-section">
+                            <label text="🤖 Telegram Bot" type="h6" style="color: #1976d2;"/>
+                            <label text="Token / Webhook / 菜单配置" style="color: #666; font-size: 14px; display: block; margin-top: 8px;"/>
+                            <container style="q-mt-md">
+                                <link url="../TelegramAdmin" text="打开 Bot 配置" btn-type="primary" style="q-btn--small"/>
+                            </container>
+                        </container>
+                    </container>
+
+                    <container style="col q-card q-pa-md">
+                        <container style="q-card-section">
+                            <label text="🏗️ HiveMind 回调" type="h6" style="color: #ff9800;"/>
+                            <label text="配置 callback URL / secret" style="color: #666; font-size: 14px; display: block; margin-top: 8px;"/>
+                            <container style="q-mt-md">
+                                <link url="../SystemConfig#hivemind" text="查看指引" btn-type="warning" style="q-btn--small"/>
+                            </container>
+                        </container>
+                    </container>
+
+                    <container style="col q-card q-pa-md">
+                        <container style="q-card-section">
+                            <label text="🧪 数据工具" type="h6" style="color: #9c27b0;"/>
+                            <label text="初始化 / 清理演示数据" style="color: #666; font-size: 14px; display: block; margin-top: 8px;"/>
+                            <container style="q-mt-md">
+                                <link url="../TestDataInit" text="测试数据管理" btn-type="accent" style="q-btn--small"/>
+                            </container>
+                        </container>
+                    </container>
+
+                    <container style="col q-card q-pa-md">
+                        <container style="q-card-section">
+                            <label text="🛠️ 诊断与工具" type="h6" style="color: #4caf50;"/>
+                            <label text="聊天调试 / 匹配检测" style="color: #666; font-size: 14px; display: block; margin-top: 8px;"/>
+                            <container style="q-mt-md q-gutter-xs">
+                                <link url="../Chat" text="聊天测试" btn-type="positive" style="q-btn--small"/>
+                                <link url="../Matching" text="匹配监控" btn-type="positive" style="q-btn--small"/>
+                            </container>
+                        </container>
+                    </container>
+                </container>
+            </container>
+
+            <!-- 系统状态区域 -->
+            <container style="row q-gutter-md q-mb-md">
+                <container style="col-6 q-card q-pa-md">
+                    <label text="🤖 Telegram / AI 状态" type="h6" style="q-mb-md"/>
+                    <container style="q-gutter-sm">
+                        <container style="row items-center q-py-xs">
+                            <label text="Bot：${System.getProperty('mcp.telegram.bot.username') ?: '@未配置'}" style="font-weight: 500;"/>
+                        </container>
+                        <container style="row items-center q-py-xs bg-green-1 q-pa-sm rounded-borders">
+                            <label text="✅ 主菜单 / 智能识别 / 多模态 / 会话上下文" style="color: #2e7d32; font-size: 12px;"/>
+                        </container>
+                        <container style="row items-center q-py-xs">
+                            <label text="AI 模型：GLM-4 Plus · 语音/图像管线已接入 MCP" style="color: #666; font-size: 12px;"/>
+                        </container>
+                    </container>
+                </container>
+
+                <container style="col-6 q-card q-pa-md">
+                    <label text="🔗 外部集成" type="h6" style="q-mb-md"/>
+                    <container style="q-gutter-sm">
+                        <container style="row items-center q-py-xs">
+                            <label text="•" style="color: #1976d2; font-weight: bold; margin-right: 8px;"/>
+                            <label text="HiveMind：Webhook + monitor 服务准备完毕" style="color: #666; font-size: 12px;"/>
+                        </container>
+                        <container style="row items-center q-py-xs">
+                            <label text="•" style="color: #1976d2; font-weight: bold; margin-right: 8px;"/>
+                            <label text="流行电商：Telegram 菜单联调阶段" style="color: #666; font-size: 12px;"/>
+                        </container>
+                        <container style="row items-center q-py-xs">
+                            <label text="•" style="color: #1976d2; font-weight: bold; margin-right: 8px;"/>
+                            <label text="大理石 ERP：架构设计进行中" style="color: #666; font-size: 12px;"/>
+                        </container>
+                    </container>
+                </container>
+            </container>
+
+            <!-- 详细配置区域 -->
+            <container style="q-mb-md">
+                <label text="🔧 详细配置" type="h5" style="q-mb-sm"/>
+                <container style="row q-gutter-md">
+                    <container style="col q-card q-pa-md">
+                        <label text="🛒 电商配置" type="h6" style="q-mb-md color: #e91e63;"/>
+                        <container style="q-gutter-xs q-mb-md">
+                            <container style="q-py-xs">
+                                <label text="Telegram 指令：/product · /order · /ec_recommend" style="color: #666; font-size: 12px;"/>
+                            </container>
+                            <container style="q-py-xs">
+                                <label text="REST 入口：/rest/s1/marketplace/ecommerce/..." style="color: #666; font-size: 12px;"/>
+                            </container>
+                            <container style="q-py-xs">
+                                <label text="控制台：智能推荐 → 电商控制台" style="color: #666; font-size: 12px;"/>
+                            </container>
+                        </container>
+                        <container style="q-gutter-xs">
+                            <link url="../Ecommerce" text="打开电商控制台" btn-type="secondary" style="q-btn--small"/>
+                            <link url="../Dashboard" text="查看 Dashboard" btn-type="secondary" style="q-btn--small"/>
+                        </container>
+                    </container>
+
+                    <container style="col q-card q-pa-md">
+                        <label text="🌐 Webhook / Ngrok" type="h6" style="q-mb-md color: #009688;"/>
+                        <container style="q-gutter-xs q-mb-md">
+                            <container style="q-py-xs">
+                                <label text="当前隧道: https://41416ace43b7.ngrok-free.app" style="color: #666; font-size: 12px;"/>
+                            </container>
+                            <container style="q-py-xs">
+                                <label text="Moqui: http://localhost:8080/rest/s1/mcp/telegram" style="color: #666; font-size: 12px;"/>
+                            </container>
+                            <container style="q-py-xs bg-grey-2 q-pa-xs rounded-borders">
+                                <label text="命令: testing-tools/telegram_webhook_test.sh" style="color: #424242; font-size: 11px;"/>
+                            </container>
+                            <container style="q-py-xs bg-grey-2 q-pa-xs rounded-borders">
+                                <label text="重设: testing-tools/telegram_webhook_setup.sh" style="color: #424242; font-size: 11px;"/>
+                            </container>
+                        </container>
+                    </container>
+
+                    <container style="col q-card q-pa-md">
+                        <label text="📁 测试脚本 &amp; REST 示例" type="h6" style="q-mb-md color: #795548;"/>
+                        <container style="q-gutter-xs q-mb-md">
+                            <container style="q-py-xs">
+                                <label text="testing-tools/ecommerce_order_rest_examples.sh" style="color: #666; font-size: 12px;"/>
+                            </container>
+                            <container style="q-py-xs bg-grey-2 q-pa-xs rounded-borders">
+                                <label text="环境变量: BASE_URL=http://localhost:8080 TOKEN=&lt;JWT&gt;" style="color: #424242; font-size: 11px;"/>
+                            </container>
+                            <container style="q-py-xs bg-grey-2 q-pa-xs rounded-borders">
+                                <label text="RUN: ./testing-tools/ecommerce_order_rest_examples.sh" style="color: #424242; font-size: 11px;"/>
+                            </container>
+                            <container style="q-py-xs">
+                                <label text="输出: 订单创建→订单列表→状态查询" style="color: #666; font-size: 12px;"/>
+                            </container>
+                        </container>
+                    </container>
+                </container>
+            </container>
+
+            <!-- 文档与调度 -->
+            <container style="q-card q-pa-md bg-grey-1">
+                <label text="📚 文档与调度" type="h6" style="q-mb-md"/>
+                <container style="q-gutter-sm">
+                    <container style="row items-center q-py-xs">
+                        <label text="•" style="color: #1976d2; font-weight: bold; margin-right: 8px;"/>
+                        <label text="Phase 3 电商计划：docs/02-tasks/task-ecommerce-module/" style="color: #666; font-size: 12px;"/>
+                    </container>
+                    <container style="row items-center q-py-xs">
+                        <label text="•" style="color: #1976d2; font-weight: bold; margin-right: 8px;"/>
+                        <label text="HiveMind 集成：docs/03-tasks/phase-2-hivemind-integration/" style="color: #666; font-size: 12px;"/>
+                    </container>
+                    <container style="row items-center q-py-xs">
+                        <label text="•" style="color: #1976d2; font-weight: bold; margin-right: 8px;"/>
+                        <label text="当前进展：docs/progress-log.md" style="color: #666; font-size: 12px;"/>
+                    </container>
+                </container>
+            </container>
         </container>
-
-        <container-row>
-            <row-col lg="3" md="6" sm="12">
-                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
-                    <label text="🤖 Telegram Bot" style="font-size:1.25rem;font-weight:500"/>
-                    <label text="Token / Webhook / 菜单配置" style="display:block;margin-top:8px"/>
-                    <link url="../TelegramAdmin" text="打开 Bot 配置" link-type="anchor" style="margin-top:8px;display:inline-block"/>
-                </container>
-            </row-col>
-            <row-col lg="3" md="6" sm="12">
-                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
-                    <label text="🏗️ HiveMind 回调" style="font-size:1.25rem;font-weight:500"/>
-                    <label text="配置 callback URL / secret" style="display:block;margin-top:8px"/>
-                    <link url="../SystemConfig#hivemind" text="查看指引" link-type="anchor" style="margin-top:8px;display:inline-block"/>
-                </container>
-            </row-col>
-            <row-col lg="3" md="6" sm="12">
-                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
-                    <label text="🧪 数据工具" style="font-size:1.25rem;font-weight:500"/>
-                    <label text="初始化 / 清理演示数据" style="display:block;margin-top:8px"/>
-                    <link url="../TestDataInit" text="测试数据管理" link-type="anchor" style="margin-top:8px;display:inline-block"/>
-                </container>
-            </row-col>
-            <row-col lg="3" md="6" sm="12">
-                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
-                    <label text="🛠️ 诊断与工具" style="font-size:1.25rem;font-weight:500"/>
-                    <label text="聊天调试 / 匹配检测" style="display:block;margin-top:8px"/>
-                    <container style="margin-top:8px;">
-                        <link url="../Chat" text="聊天测试" link-type="anchor" style="display:block"/>
-                        <link url="../Matching" text="匹配监控" link-type="anchor" style="display:block"/>
-                    </container>
-                </container>
-            </row-col>
-        </container-row>
-
-        <container-row>
-            <row-col lg="6" md="6" sm="12">
-                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
-                    <label text="Telegram / AI 状态" style="font-size:1.25rem;font-weight:500"/>
-                    <label text="Bot：${System.getProperty('mcp.telegram.bot.username') ?: '@未配置'}" style="display:block;margin-top:8px"/>
-                    <label text="✅ 主菜单 / 智能识别 / 多模态 / 会话上下文" style="display:block;margin-top:4px"/>
-                    <label text="AI 模型：GLM-4 Plus · 语音/图像管线已接入 MCP" style="display:block;margin-top:4px"/>
-                </container>
-            </row-col>
-            <row-col lg="6" md="6" sm="12">
-                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
-                    <label text="外部集成" style="font-size:1.25rem;font-weight:500"/>
-                    <label text="HiveMind：Webhook + monitor 服务准备完毕" style="display:block;margin-top:8px"/>
-                    <label text="流行电商：Telegram 菜单联调阶段" style="display:block;margin-top:4px"/>
-                    <label text="大理石 ERP：架构设计进行中" style="display:block;margin-top:4px"/>
-                </container>
-            </row-col>
-        </container-row>
-
-        <container-row>
-            <row-col lg="4" md="6" sm="12">
-                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
-                    <label text="🛒 电商配置" style="font-size:1.25rem;font-weight:500"/>
-                    <label text="Telegram 指令：/product · /order · /ec_recommend" style="display:block;margin-top:8px;color:#616161"/>
-                    <label text="REST 入口：/rest/s1/marketplace/ecommerce/..." style="display:block;margin-top:4px;color:#616161"/>
-                    <label text="控制台：智能推荐 → 电商控制台" style="display:block;margin-top:4px;color:#616161"/>
-                    <container style="margin-top:12px;">
-                        <link url="../Ecommerce" text="打开电商控制台" link-type="anchor" style="display:block;margin-bottom:4px;"/>
-                        <link url="../Dashboard" text="查看 Dashboard" link-type="anchor" style="display:block;"/>
-                    </container>
-                </container>
-            </row-col>
-            <row-col lg="4" md="6" sm="12">
-                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
-                    <label text="🌐 Webhook / Ngrok" style="font-size:1.25rem;font-weight:500"/>
-                    <label text="当前隧道: https://41416ace43b7.ngrok-free.app" style="display:block;margin-top:8px;color:#616161"/>
-                    <label text="Moqui: http://localhost:8080/rest/s1/mcp/telegram" style="display:block;margin-top:4px;color:#616161"/>
-                    <label text="命令: testing-tools/telegram_webhook_test.sh" style="display:block;margin-top:4px;color:#9e9e9e"/>
-                    <label text="如需重设使用 testing-tools/telegram_webhook_setup.sh" style="display:block;margin-top:4px;color:#9e9e9e"/>
-                </container>
-            </row-col>
-            <row-col lg="4" md="12" sm="12">
-                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
-                    <label text="📁 测试脚本 &amp; REST 示例" style="font-size:1.25rem;font-weight:500"/>
-                    <label text="testing-tools/ecommerce_order_rest_examples.sh" style="display:block;margin-top:8px;color:#616161"/>
-                    <label text="环境变量: BASE_URL=http://localhost:8080 TOKEN=&lt;JWT&gt;" style="display:block;margin-top:4px;color:#9e9e9e"/>
-                    <label text="RUN: ./testing-tools/ecommerce_order_rest_examples.sh" style="display:block;margin-top:4px;color:#9e9e9e"/>
-                    <label text="输出: 订单创建→订单列表→状态查询" style="display:block;margin-top:4px;color:#616161"/>
-                </container>
-            </row-col>
-        </container-row>
-
-        <container-row>
-            <row-col lg="12">
-                <container style="border:1px solid #e0e0e0;border-radius:4px;padding:16px;margin-bottom:16px;">
-                    <label text="文档与调度" style="font-size:1.25rem;font-weight:500"/>
-                    <label text="· Phase 3 电商计划：docs/02-tasks/task-ecommerce-module/" style="display:block;margin-top:8px"/>
-                    <label text="· HiveMind 集成：docs/03-tasks/phase-2-hivemind-integration/" style="display:block"/>
-                    <label text="· 当前进展：docs/progress-log.md" style="display:block"/>
-                </container>
-            </row-col>
-        </container-row>
     </widgets>
 </screen>

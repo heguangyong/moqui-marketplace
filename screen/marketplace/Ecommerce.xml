@@ -160,218 +160,266 @@
     </actions>
 
     <widgets>
-        <container style="padding:16px;">
-            <label text="流行电商控制台" style="font-size:1.5rem;font-weight:600;margin-bottom:16px;display:block"/>
-            <label text="基于 Telegram 的商品、库存与订单协同中心" style="color:#616161;margin-bottom:24px;display:block"/>
+        <!-- 页面标题区域 -->
+        <container style="q-pa-md">
+            <container style="q-mb-md">
+                <label text="🛍️ 流行电商控制台" type="h4"/>
+                <label text="基于 Telegram 的商品、库存与订单协同中心" style="color: #666; font-size: 14px;"/>
+            </container>
 
-        <container-row>
-            <row-col lg="3" md="6" sm="12">
-                <container style="text-align:center;margin-bottom:16px;border:1px solid #e0e0e0;border-radius:6px;padding:16px;">
-                    <label text="商品总数" style="font-size:1rem;color:#616161"/>
-                    <label text="${productStats.total ?: 0}" style="font-size:2rem;font-weight:bold;color:#2196f3;margin:8px 0"/>
-                    <label text="活跃 ${productStats.active ?: 0}" style="font-size:0.9rem;color:#9e9e9e"/>
-                </container>
-            </row-col>
-            <row-col lg="3" md="6" sm="12">
-                <container style="text-align:center;margin-bottom:16px;border:1px solid #e0e0e0;border-radius:6px;padding:16px;">
-                    <label text="低库存" style="font-size:1rem;color:#f57c00"/>
-                    <label text="${productStats.lowStock ?: 0}" style="font-size:2rem;font-weight:bold;color:#f57c00;margin:8px 0"/>
-                    <label text="阈值 &lt; 10" style="font-size:0.9rem;color:#9e9e9e"/>
-                </container>
-            </row-col>
-            <row-col lg="3" md="6" sm="12">
-                <container style="text-align:center;margin-bottom:16px;border:1px solid #e0e0e0;border-radius:6px;padding:16px;">
-                    <label text="待处理订单" style="font-size:1rem;color:#009688"/>
-                    <label text="${orderStats.open ?: 0}" style="font-size:2rem;font-weight:bold;color:#009688;margin:8px 0"/>
-                    <label text="今日新建 ${orderStats.today ?: 0}" style="font-size:0.9rem;color:#9e9e9e"/>
-                </container>
-            </row-col>
-            <row-col lg="3" md="6" sm="12">
-                <container style="text-align:center;margin-bottom:16px;border:1px solid #e0e0e0;border-radius:6px;padding:16px;">
-                    <label text="品类覆盖" style="font-size:1rem;color:#7b1fa2"/>
-                    <label text="${productStats.categories ?: 0}" style="font-size:2rem;font-weight:bold;color:#7b1fa2;margin:8px 0"/>
-                    <label text="Telegram 菜单实时同步" style="font-size:0.9rem;color:#9e9e9e"/>
-                </container>
-            </row-col>
-        </container-row>
+            <!-- 关键统计卡片 -->
+            <container style="q-mb-md">
+                <label text="📊 业务概览" type="h5" style="q-mb-sm"/>
+                <container style="row q-gutter-md">
+                    <container style="col q-card q-pa-md">
+                        <container style="text-center">
+                            <label text="商品总数" style="font-size: 14px; color: #666;"/>
+                            <container style="q-mt-sm">
+                                <label text="${productStats.total ?: 0}" style="font-size: 24px; font-weight: bold; color: #1976d2;"/>
+                                <label text="总数" style="font-size: 12px; color: #666; margin-left: 8px;"/>
+                            </container>
+                            <container style="q-mt-xs">
+                                <label text="${productStats.active ?: 0}" style="font-size: 16px; color: #4caf50;"/>
+                                <label text="活跃" style="font-size: 12px; color: #666; margin-left: 4px;"/>
+                            </container>
+                        </container>
+                    </container>
 
-        <container-row>
-            <row-col lg="12">
-                <container style="border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
-                    <label text="常用操作" style="font-size:1.1rem;font-weight:500;display:block;margin-bottom:12px"/>
-                    <container style="display:flex;flex-wrap:wrap;gap:12px;">
-                        <link text="➕ Telegram /product add" url="#" link-type="anchor"
-                              style="padding:8px 12px;border:1px solid #2196f3;border-radius:4px;color:#2196f3;"
-                              transition="false"/>
-                        <link text="🛒 Telegram /order create" url="#" link-type="anchor"
-                              style="padding:8px 12px;border:1px solid #009688;border-radius:4px;color:#009688;"
-                              transition="false"/>
-                        <link text="📊 查看匹配 Dashboard" url="../Dashboard" link-type="anchor"
-                              style="padding:8px 12px;border:1px solid #795548;border-radius:4px;color:#795548;"/>
-                        <link text="⚙️ 电商配置 (SystemConfig)" url="../SystemConfig" link-type="anchor"
-                              style="padding:8px 12px;border:1px solid #546e7a;border-radius:4px;color:#546e7a;"/>
-                        <label text="提示：指令均在 Telegram Bot 中执行，Web 控制台仅用于监控与校验。" style="color:#757575;padding:8px 0;"/>
+                    <container style="col q-card q-pa-md">
+                        <container style="text-center">
+                            <label text="库存预警" style="font-size: 14px; color: #666;"/>
+                            <container style="q-mt-sm">
+                                <label text="${productStats.lowStock ?: 0}" style="font-size: 24px; font-weight: bold; color: #ff9800;"/>
+                                <label text="低库存" style="font-size: 12px; color: #666; margin-left: 8px;"/>
+                            </container>
+                            <container style="q-mt-xs">
+                                <label text="阈值 &lt; 10" style="font-size: 12px; color: #666;"/>
+                            </container>
+                        </container>
+                    </container>
+
+                    <container style="col q-card q-pa-md">
+                        <container style="text-center">
+                            <label text="待处理订单" style="font-size: 14px; color: #666;"/>
+                            <container style="q-mt-sm">
+                                <label text="${orderStats.open ?: 0}" style="font-size: 24px; font-weight: bold; color: #009688;"/>
+                                <label text="待处理" style="font-size: 12px; color: #666; margin-left: 8px;"/>
+                            </container>
+                            <container style="q-mt-xs">
+                                <label text="${orderStats.today ?: 0}" style="font-size: 16px; color: #ff5722;"/>
+                                <label text="今日新建" style="font-size: 12px; color: #666; margin-left: 4px;"/>
+                            </container>
+                        </container>
+                    </container>
+
+                    <container style="col q-card q-pa-md">
+                        <container style="text-center">
+                            <label text="品类覆盖" style="font-size: 14px; color: #666;"/>
+                            <container style="q-mt-sm">
+                                <label text="${productStats.categories ?: 0}" style="font-size: 24px; font-weight: bold; color: #9c27b0;"/>
+                                <label text="种类" style="font-size: 12px; color: #666; margin-left: 8px;"/>
+                            </container>
+                            <container style="q-mt-xs">
+                                <label text="Telegram 同步" style="font-size: 12px; color: #666;"/>
+                            </container>
+                        </container>
                     </container>
                 </container>
-            </row-col>
-        </container-row>
+            </container>
 
-        <container-row>
-            <row-col lg="6" md="12">
-                <container style="border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
-                    <label text="最新商品" style="font-size:1.1rem;font-weight:500"/>
+            <!-- 常用操作区域 -->
+            <container style="q-card q-pa-md q-mb-md">
+                <label text="⚡ 常用操作" type="h5" style="q-mb-md"/>
+                <container style="row q-gutter-md q-mb-md">
+                    <link url="#" text="➕ Telegram /product add" btn-type="primary" style="col" transition="false"/>
+                    <link url="#" text="🛒 Telegram /order create" btn-type="secondary" style="col" transition="false"/>
+                    <link url="../Dashboard" text="📊 智能匹配控制台" btn-type="accent" style="col"/>
+                    <link url="../SystemConfig" text="⚙️ 系统配置" btn-type="warning" style="col"/>
+                </container>
+                <container style="q-pa-sm bg-blue-1 text-blue-8 rounded-borders">
+                    <label text="💡 提示：指令均在 Telegram Bot 中执行，Web 控制台仅用于监控与校验。" style="font-size: 12px;"/>
+                </container>
+            </container>
+
+            <!-- 数据表格区域 -->
+            <container style="row q-gutter-md q-mb-md">
+                <container style="col-6 q-card q-pa-md">
+                    <label text="📦 最新商品" type="h6" style="q-mb-md"/>
                     <if condition="recentProducts">
-                        <container style="table table-striped margin-top">
-                            <container style="thead">
-                                <container style="tr">
-                                    <container style="th"><label text="名称"/></container>
-                                    <container style="th"><label text="分类"/></container>
-                                    <container style="th"><label text="价格"/></container>
-                                    <container style="th"><label text="库存"/></container>
+                        <container style="q-table__container">
+                            <container style="q-table__table">
+                                <container style="thead">
+                                    <container style="tr">
+                                        <container style="th text-left"><label text="名称"/></container>
+                                        <container style="th text-left"><label text="分类"/></container>
+                                        <container style="th text-right"><label text="价格"/></container>
+                                        <container style="th text-right"><label text="库存"/></container>
+                                    </container>
                                 </container>
-                            </container>
-                            <container style="tbody">
-                                <section-iterate list="recentProducts" entry="product">
-                                    <widgets>
-                                        <container style="tr">
-                                            <container style="td"><label text="${product.productName ?: product.ecommerceProductId}"/></container>
-                                            <container style="td"><label text="${productCategoryName[product.productCategoryId] ?: product.productCategoryId ?: '—'}"/></container>
-                                            <container style="td"><label text="${product.price ? ec.l10n.formatCurrency(product.price, product.currencyUomId ?: 'CNY') : '—'}"/></container>
-                                            <container style="td"><label text="${product.stockQuantity ?: 0}"/></container>
-                                        </container>
-                                    </widgets>
-                                </section-iterate>
+                                <container style="tbody">
+                                    <section-iterate list="recentProducts" entry="product">
+                                        <widgets>
+                                            <container style="tr">
+                                                <container style="td"><label text="${product.productName ?: product.ecommerceProductId}" style="font-weight: 500;"/></container>
+                                                <container style="td"><label text="${productCategoryName[product.productCategoryId] ?: product.productCategoryId ?: '—'}" style="color: #666;"/></container>
+                                                <container style="td text-right"><label text="${product.price ? ec.l10n.formatCurrency(product.price, product.currencyUomId ?: 'CNY') : '—'}" style="color: #1976d2;"/></container>
+                                                <container style="td text-right"><label text="${product.stockQuantity ?: 0}" style="color: ${(product.stockQuantity ?: 0) &lt; 10 ? '#ff5722' : '#4caf50'};"/></container>
+                                            </container>
+                                        </widgets>
+                                    </section-iterate>
+                                </container>
                             </container>
                         </container>
                     </if>
                     <if condition="!recentProducts">
-                        <label text="暂无商品记录" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                        <container style="text-center q-pa-md text-grey-6">
+                            <label text="暂无商品记录"/>
+                        </container>
                     </if>
                 </container>
-            </row-col>
-            <row-col lg="6" md="12">
-                <container style="border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
-                    <label text="最新订单" style="font-size:1.1rem;font-weight:500"/>
+
+                <container style="col-6 q-card q-pa-md">
+                    <label text="🛒 最新订单" type="h6" style="q-mb-md"/>
                     <if condition="recentOrders">
-                        <container style="table table-striped margin-top">
-                            <container style="thead">
-                                <container style="tr">
-                                    <container style="th"><label text="订单"/></container>
-                                    <container style="th"><label text="状态"/></container>
-                                    <container style="th"><label text="金额"/></container>
-                                    <container style="th"><label text="客户"/></container>
+                        <container style="q-table__container">
+                            <container style="q-table__table">
+                                <container style="thead">
+                                    <container style="tr">
+                                        <container style="th text-left"><label text="订单"/></container>
+                                        <container style="th text-left"><label text="状态"/></container>
+                                        <container style="th text-right"><label text="金额"/></container>
+                                        <container style="th text-left"><label text="客户"/></container>
+                                    </container>
                                 </container>
-                            </container>
-                            <container style="tbody">
-                                <section-iterate list="recentOrders" entry="order">
-                                    <widgets>
-                                        <container style="tr">
-                                            <container style="td"><label text="${order.ecommerceOrderId}"/></container>
-                                            <container style="td"><label text="${order.orderStatus ?: '—'}"/></container>
-                                            <container style="td"><label text="${order.orderTotal ? ec.l10n.formatCurrency(order.orderTotal, order.currencyUomId ?: 'CNY') : '—'}"/></container>
-                                            <container style="td"><label text="${order.ecommerceCustomerId ?: '—'}"/></container>
-                                        </container>
-                                    </widgets>
-                                </section-iterate>
+                                <container style="tbody">
+                                    <section-iterate list="recentOrders" entry="order">
+                                        <widgets>
+                                            <container style="tr">
+                                                <container style="td"><label text="${order.ecommerceOrderId}" style="font-weight: 500;"/></container>
+                                                <container style="td"><label text="${order.orderStatus ?: '—'}" style="color: #666;"/></container>
+                                                <container style="td text-right"><label text="${order.orderTotal ? ec.l10n.formatCurrency(order.orderTotal, order.currencyUomId ?: 'CNY') : '—'}" style="color: #4caf50;"/></container>
+                                                <container style="td"><label text="${order.ecommerceCustomerId ?: '—'}" style="color: #666;"/></container>
+                                            </container>
+                                        </widgets>
+                                    </section-iterate>
+                                </container>
                             </container>
                         </container>
                     </if>
                     <if condition="!recentOrders">
-                        <label text="暂无订单记录" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                        <container style="text-center q-pa-md text-grey-6">
+                            <label text="暂无订单记录"/>
+                        </container>
                     </if>
                 </container>
-            </row-col>
-        </container-row>
+            </container>
 
-        <container-row>
-            <row-col lg="6" md="12">
-                <container style="border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
-                    <label text="订单状态分布" style="font-size:1.1rem;font-weight:500"/>
+            <!-- 状态分析区域 -->
+            <container style="row q-gutter-md q-mb-md">
+                <container style="col-6 q-card q-pa-md">
+                    <label text="📊 订单状态分布" type="h6" style="q-mb-md"/>
                     <if condition="statusSummary">
                         <section-iterate list="statusSummary.entrySet()" entry="entry">
                             <widgets>
-                                <container style="display:flex;justify-content:space-between;border-bottom:1px solid #f0f0f0;padding:6px 0;">
-                                    <label text="${entry.key}" style="font-weight:500"/>
-                                    <label text="${entry.value}" style="color:#616161"/>
+                                <container style="row justify-between items-center q-py-sm border-bottom">
+                                    <label text="${entry.key}" style="font-weight: 500;"/>
+                                    <container style="q-px-sm q-py-xs bg-blue-1 text-blue-8 rounded-borders">
+                                        <label text="${entry.value}"/>
+                                    </container>
                                 </container>
                             </widgets>
                         </section-iterate>
                     </if>
                     <if condition="!statusSummary || statusSummary.isEmpty()">
-                        <label text="暂无状态数据" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                        <container style="text-center q-pa-md text-grey-6">
+                            <label text="暂无状态数据"/>
+                        </container>
                     </if>
                 </container>
-            </row-col>
-            <row-col lg="6" md="12">
-                <container style="border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
-                    <label text="品类销售排行" style="font-size:1.1rem;font-weight:500"/>
+
+                <container style="col-6 q-card q-pa-md">
+                    <label text="🏆 品类销售排行" type="h6" style="q-mb-md"/>
                     <if condition="categorySales">
                         <section-iterate list="categorySales" entry="cs">
                             <widgets>
-                                <container style="padding:6px 0;border-bottom:1px solid #f0f0f0;">
-                                    <label text="${cs.categoryName}" style="font-weight:500"/>
-                                    <label text="${cs.totalAmount ? ec.l10n.formatCurrency(cs.totalAmount, 'CNY') : '—'} / 数量 ${cs.quantity ?: 0}"
-                                           style="display:block;color:#616161"/>
+                                <container style="q-py-sm border-bottom">
+                                    <label text="${cs.categoryName}" style="font-weight: 500; display: block;"/>
+                                    <label text="${cs.totalAmount ? ec.l10n.formatCurrency(cs.totalAmount, 'CNY') : '—'} / 数量 ${cs.quantity ?: 0}" style="color: #666; font-size: 12px;"/>
                                 </container>
                             </widgets>
                         </section-iterate>
                     </if>
                     <if condition="!categorySales">
-                        <label text="暂无销售数据" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                        <container style="text-center q-pa-md text-grey-6">
+                            <label text="暂无销售数据"/>
+                        </container>
                     </if>
                 </container>
-            </row-col>
-        </container-row>
+            </container>
 
-        <container-row>
-            <row-col lg="6" md="12">
-                <container style="border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
-                    <label text="低库存提醒" style="font-size:1.1rem;font-weight:500"/>
+            <!-- 提醒和客户分析区域 -->
+            <container style="row q-gutter-md q-mb-md">
+                <container style="col-6 q-card q-pa-md">
+                    <label text="⚠️ 低库存提醒" type="h6" style="q-mb-md"/>
                     <if condition="lowStockProducts">
                         <section-iterate list="lowStockProducts" entry="product">
                             <widgets>
-                                <container style="padding:6px 0;border-bottom:1px solid #f0f0f0;">
-                                    <label text="${product.productName ?: product.ecommerceProductId}" style="font-weight:500"/>
-                                    <label text="库存 ${product.stockQuantity ?: 0} 件 · 分类 ${productCategoryName[product.productCategoryId] ?: '—'}"
-                                           style="display:block;color:#616161"/>
+                                <container style="q-py-sm border-bottom bg-orange-1 q-pa-sm q-mb-sm rounded-borders">
+                                    <label text="${product.productName ?: product.ecommerceProductId}" style="font-weight: 500; display: block;"/>
+                                    <label text="库存 ${product.stockQuantity ?: 0} 件 · 分类 ${productCategoryName[product.productCategoryId] ?: '—'}" style="color: #e65100; font-size: 12px;"/>
                                 </container>
                             </widgets>
                         </section-iterate>
                     </if>
                     <if condition="!lowStockProducts">
-                        <label text="暂无低库存商品" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                        <container style="text-center q-pa-md text-green-6">
+                            <label text="✅ 无低库存商品"/>
+                        </container>
                     </if>
                 </container>
-            </row-col>
-            <row-col lg="6" md="12">
-                <container style="border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
-                    <label text="主要客户" style="font-size:1.1rem;font-weight:500"/>
+
+                <container style="col-6 q-card q-pa-md">
+                    <label text="👑 主要客户" type="h6" style="q-mb-md"/>
                     <if condition="topCustomers">
                         <section-iterate list="topCustomers" entry="cust">
                             <widgets>
-                                <container style="padding:6px 0;border-bottom:1px solid #f0f0f0;">
-                                    <label text="${cust.customerName ?: cust.ecommerceCustomerId}" style="font-weight:500"/>
-                                    <label text="订单 ${cust.orderCount ?: 0} · 金额 ${cust.totalAmount ? ec.l10n.formatCurrency(cust.totalAmount, 'CNY') : '—'}"
-                                           style="display:block;color:#616161"/>
+                                <container style="q-py-sm border-bottom">
+                                    <label text="${cust.customerName ?: cust.ecommerceCustomerId}" style="font-weight: 500; display: block;"/>
+                                    <label text="订单 ${cust.orderCount ?: 0} · 金额 ${cust.totalAmount ? ec.l10n.formatCurrency(cust.totalAmount, 'CNY') : '—'}" style="color: #666; font-size: 12px;"/>
                                 </container>
                             </widgets>
                         </section-iterate>
                     </if>
                     <if condition="!topCustomers">
-                        <label text="暂无客户统计" style="color:#9e9e9e;display:block;margin-top:8px"/>
+                        <container style="text-center q-pa-md text-grey-6">
+                            <label text="暂无客户统计"/>
+                        </container>
                     </if>
                 </container>
-            </row-col>
-        </container-row>
+            </container>
 
-        <container style="border:1px dashed #bdbdbd;border-radius:6px;padding:16px;background:#fafafa;">
-            <label text="Telegram 联动提示" style="font-weight:500;margin-bottom:8px;display:block"/>
-            <label text="• 商品录入：/product add name=示例价格=199 stock=50" style="display:block;color:#616161"/>
-            <label text="• 订单创建：/order create customer=EC_CUST_001 items=ECP1001:1,ECP1004:2" style="display:block;color:#616161"/>
-            <label text="• 智能推荐：点击菜单“🎯 智能推荐”或直接输入需求" style="display:block;color:#616161"/>
-            <label text="• 若要跟进项目执行，请转至“蜂巢项目管理”模块或使用 /project 指令" style="display:block;color:#616161"/>
-        </container>
-
+            <!-- Telegram 联动提示 -->
+            <container style="q-card q-pa-md bg-blue-1">
+                <label text="📱 Telegram 联动提示" type="h6" style="q-mb-md text-blue-8"/>
+                <container style="q-gutter-sm">
+                    <container style="row items-center q-py-xs">
+                        <label text="•" style="color: #1976d2; font-weight: bold; margin-right: 8px;"/>
+                        <label text="商品录入：/product add name=示例 price=199 stock=50" style="color: #1976d2;"/>
+                    </container>
+                    <container style="row items-center q-py-xs">
+                        <label text="•" style="color: #1976d2; font-weight: bold; margin-right: 8px;"/>
+                        <label text="订单创建：/order create customer=EC_CUST_001 items=ECP1001:1,ECP1004:2" style="color: #1976d2;"/>
+                    </container>
+                    <container style="row items-center q-py-xs">
+                        <label text="•" style="color: #1976d2; font-weight: bold; margin-right: 8px;"/>
+                        <label text="智能推荐：点击菜单&quot;🎯 智能推荐&quot;或直接输入需求" style="color: #1976d2;"/>
+                    </container>
+                    <container style="row items-center q-py-xs">
+                        <label text="•" style="color: #1976d2; font-weight: bold; margin-right: 8px;"/>
+                        <label text="项目跟进：转至&quot;蜂巢项目管理&quot;模块或使用 /project 指令" style="color: #1976d2;"/>
+                    </container>
+                </container>
+            </container>
         </container>
     </widgets>
 </screen>
