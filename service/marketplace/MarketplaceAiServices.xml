@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd"
+          package-name="marketplace.ai">
+
+    <!-- ==================== Marketplace AI服务迁移层 ==================== -->
+
+    <!-- 统一marketplace消息处理服务 - 替代MarketplaceMcpService.processMarketplaceMessage -->
+    <service verb="process" noun="MarketplaceMessage" authenticate="false" allow-remote="true">
+        <description>使用统一MCP AI服务的marketplace消息处理</description>
+        <in-parameters>
+            <parameter name="sessionId" required="true"/>
+            <parameter name="message" required="true"/>
+            <parameter name="merchantId" required="true"/>
+            <parameter name="messageType" default-value="text"/>
+            <parameter name="attachmentInfo" type="Map"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="aiResponse"/>
+            <parameter name="intent"/>
+            <parameter name="transcribedText"/>
+            <parameter name="matches" type="List"/>
+            <parameter name="listingId"/>
+            <parameter name="error"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                try {
+                    ec.logger.info("Processing marketplace message using unified MCP AI services")
+
+                    // 处理多模态消息
+                    if (messageType != "text") {
+                        def result = processMultimodalMessage(messageType, attachmentInfo, sessionId, merchantId, message)
+                        success = result.success
+                        aiResponse = result.aiResponse
+                        intent = result.intent
+                        transcribedText = result.transcribedText
+                        error = result.error
+                        return
+                    }
+
+                    // 1. 使用统一意图分类服务
+                    def intentResult = ec.service.sync().name("mcp.ai.classify#Intent").parameters([
+                        userInput: message,
+                        module: "marketplace",
+                        context: buildMarketplaceContext(sessionId, merchantId)
+                    ]).call()
+
+                    if (!intentResult.success) {
+                        throw new Exception("意图分类失败: " + intentResult.error)
+                    }
+
+                    intent = intentResult.intent
+                    def extractedEntities = intentResult.extractedEntities
+
+                    // 2. 根据意图处理业务逻辑
+                    def businessResult = processMarketplaceBusiness(intent, extractedEntities, message, sessionId, merchantId)
+
+                    // 3. 使用统一文本生成服务生成响应
+                    def textGenResult = ec.service.sync().name("mcp.ai.generate#Text").parameters([
+                        prompt: buildMarketplacePrompt(message, intent, businessResult),
+                        systemPrompt: "你是一个专业的农贸市场AI助手，帮助商家进行智能供需撮合。你需要保持礼貌、简洁，引导用户提供必要信息，并在可能的情况下调用平台服务完成供需发布、匹配、统计等任务。",
+                        context: buildMarketplaceContext(sessionId, merchantId),
+                        module: "marketplace",
+                        temperature: 0.2,
+                        maxTokens: 1024
+                    ]).call()
+
+                    if (!textGenResult.success) {
+                        throw new Exception("文本生成失败: " + textGenResult.error)
+                    }
+
+                    // 4. 保存对话记录
+                    saveMarketplaceDialog(sessionId, message, textGenResult.generatedText, intent, merchantId)
+
+                    // 5. 返回结果
+                    success = true
+                    aiResponse = textGenResult.generatedText
+                    matches = businessResult.matches
+                    listingId = businessResult.listingId
+
+                    ec.logger.info("Marketplace message processed successfully: ${intent}")
+
+                } catch (Exception e) {
+                    ec.logger.error("Error processing marketplace message: ${e.message}", e)
+                    success = false
+                    error = e.message
+                    aiResponse = "抱歉，系统暂时无法处理您的请求，请稍后再试。"
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+    <!-- 多模态消息处理服务 -->
+    <service verb="processMultimodalMessage" noun="Internal" authenticate="false" type="inline">
+        <in-parameters>
+            <parameter name="messageType" required="true"/>
+            <parameter name="attachmentInfo" type="Map" required="true"/>
+            <parameter name="sessionId" required="true"/>
+            <parameter name="merchantId" required="true"/>
+            <parameter name="message" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="aiResponse"/>
+            <parameter name="intent"/>
+            <parameter name="transcribedText"/>
+            <parameter name="error"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                try {
+                    switch (messageType) {
+                        case "voice":
+                        case "audio":
+                            def voiceResult = processVoiceMessage(attachmentInfo, sessionId, merchantId)
+                            success = voiceResult.success
+                            aiResponse = voiceResult.aiResponse
+                            intent = voiceResult.intent
+                            transcribedText = voiceResult.transcribedText
+                            error = voiceResult.error
+                            break
+
+                        case "photo":
+                            def imageResult = processImageMessage(attachmentInfo, sessionId, merchantId, message)
+                            success = imageResult.success
+                            aiResponse = imageResult.aiResponse
+                            intent = imageResult.intent
+                            error = imageResult.error
+                            break
+
+                        default:
+                            success = true
+                            intent = "unsupported_media"
+                            aiResponse = "收到您的${messageType}消息，目前系统正在学习处理这种类型的内容。请您用文字描述您的需求。"
+                    }
+                } catch (Exception e) {
+                    success = false
+                    error = e.message
+                    aiResponse = "抱歉，暂时无法处理您发送的内容，请用文字描述您的需求。"
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+    <!-- 语音消息处理服务 -->
+    <service verb="processVoiceMessage" noun="Internal" authenticate="false" type="inline">
+        <in-parameters>
+            <parameter name="attachmentInfo" type="Map" required="true"/>
+            <parameter name="sessionId" required="true"/>
+            <parameter name="merchantId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="aiResponse"/>
+            <parameter name="intent"/>
+            <parameter name="transcribedText"/>
+            <parameter name="error"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                try {
+                    ec.logger.info("Processing voice message using unified MCP AI service")
+
+                    def fileId = attachmentInfo?.fileId
+                    if (!fileId) {
+                        throw new Exception("缺少音频文件ID")
+                    }
+
+                    // 1. 下载音频文件
+                    def audioUrl = downloadTelegramAudioFile(fileId)
+                    if (!audioUrl) {
+                        throw new Exception("无法下载音频文件")
+                    }
+
+                    // 2. 使用统一音频转录服务
+                    def transcribeResult = ec.service.sync().name("mcp.ai.transcribe#Audio").parameters([
+                        audioUrl: audioUrl,
+                        module: "marketplace",
+                        language: "auto"
+                    ]).call()
+
+                    if (!transcribeResult.success) {
+                        throw new Exception("音频转录失败: " + transcribeResult.error)
+                    }
+
+                    transcribedText = transcribeResult.transcribedText
+                    def detectedLanguage = transcribeResult.detectedLanguage
+
+                    // 3. 如果转录成功，处理转录文本
+                    if (transcribedText && !transcribedText.trim().isEmpty()) {
+                        // 使用转录文本进行意图分析和响应生成
+                        def processResult = ec.service.sync().name("marketplace.ai.process#MarketplaceMessage").parameters([
+                            sessionId: sessionId,
+                            message: transcribedText,
+                            merchantId: merchantId,
+                            messageType: "text"
+                        ]).call()
+
+                        success = processResult.success
+                        aiResponse = processResult.aiResponse
+                        intent = processResult.intent
+                        error = processResult.error
+
+                        // 增强语音响应格式
+                        if (success) {
+                            aiResponse = buildVoiceResponse(transcribedText, detectedLanguage, aiResponse, intent)
+                        }
+                    } else {
+                        // 转录失败的回复
+                        success = true
+                        intent = "voice_processing_failed"
+                        aiResponse = "🎙️ 收到您的语音消息！\\n\\n" +
+                                   "🔄 语音识别遇到困难，请您：\\n" +
+                                   "📝 **重新用文字描述**\\n" +
+                                   "• 您要发布供应信息吗？\\n" +
+                                   "• 您要采购某种产品吗？\\n" +
+                                   "• 您想查看匹配建议吗？\\n\\n" +
+                                   "💡 提示：说话清晰一些，支持中英文混合语音"
+                    }
+
+                } catch (Exception e) {
+                    ec.logger.error("Error in voice message processing: ${e.message}", e)
+                    success = false
+                    error = e.message
+                    aiResponse = "🎙️ 语音消息处理出错，请用文字描述您的需求。"
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+    <!-- 图像消息处理服务 -->
+    <service verb="processImageMessage" noun="Internal" authenticate="false" type="inline">
+        <in-parameters>
+            <parameter name="attachmentInfo" type="Map" required="true"/>
+            <parameter name="sessionId" required="true"/>
+            <parameter name="merchantId" required="true"/>
+            <parameter name="caption"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="aiResponse"/>
+            <parameter name="intent"/>
+            <parameter name="analysis"/>
+            <parameter name="productType"/>
+            <parameter name="error"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                try {
+                    ec.logger.info("Processing image message using unified MCP AI service")
+
+                    def fileId = attachmentInfo?.fileId
+                    if (!fileId) {
+                        throw new Exception("缺少图像文件ID")
+                    }
+
+                    // 1. 下载图像文件
+                    def imageUrl = downloadTelegramImageFile(fileId)
+                    if (!imageUrl) {
+                        throw new Exception("无法下载图像文件")
+                    }
+
+                    // 2. 使用统一图像分析服务
+                    def analyzeResult = ec.service.sync().name("mcp.ai.analyze#Image").parameters([
+                        imageUrl: imageUrl,
+                        module: "marketplace",
+                        analysisType: "product",
+                        language: "zh-CN",
+                        customPrompt: "请分析这张图片，识别其中的产品、材料或物品。重点识别工业材料、机械设备、建筑材料或商业产品。"
+                    ]).call()
+
+                    if (!analyzeResult.success) {
+                        throw new Exception("图像分析失败: " + analyzeResult.error)
+                    }
+
+                    analysis = analyzeResult.analysis
+                    def tags = analyzeResult.tags
+                    def confidence = analyzeResult.confidence
+
+                    // 3. 提取产品类型
+                    productType = extractProductTypeFromAnalysis(analysis, tags)
+
+                    // 4. 生成智能响应
+                    def responsePrompt = buildImageResponsePrompt(analysis, productType, caption, attachmentInfo)
+
+                    def textGenResult = ec.service.sync().name("mcp.ai.generate#Text").parameters([
+                        prompt: responsePrompt,
+                        systemPrompt: "你是marketplace图像分析AI助手，帮助商家分析产品图片并提供业务建议。",
+                        module: "marketplace",
+                        temperature: 0.3,
+                        maxTokens: 800
+                    ]).call()
+
+                    if (textGenResult.success) {
+                        aiResponse = textGenResult.generatedText
+                    } else {
+                        // 使用分析结果生成基础响应
+                        aiResponse = buildBasicImageResponse(analysis, productType, caption)
+                    }
+
+                    success = true
+                    intent = "image_processing"
+
+                    ec.logger.info("Image message processed successfully")
+
+                } catch (Exception e) {
+                    ec.logger.error("Error in image message processing: ${e.message}", e)
+                    success = false
+                    error = e.message
+                    aiResponse = "📷 图像分析遇到问题，请您用文字描述图片中的产品信息。"
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+    <!-- ==================== 辅助方法服务 ==================== -->
+
+    <!-- 构建marketplace上下文 -->
+    <service verb="buildMarketplaceContext" noun="Internal" authenticate="false" type="inline">
+        <in-parameters>
+            <parameter name="sessionId" required="true"/>
+            <parameter name="merchantId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="context"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                // 构建marketplace上下文信息
+                StringBuilder contextBuilder = new StringBuilder()
+                contextBuilder.append("商家ID: ").append(merchantId).append("\\n")
+                contextBuilder.append("会话ID: ").append(sessionId).append("\\n")
+
+                // 获取最近的对话历史
+                try {
+                    def recentMessages = ec.entity.find("mcp.dialog.McpDialogMessage")
+                        .condition("sessionId", sessionId)
+                        .orderBy("-processedDate")
+                        .limit(3)
+                        .disableAuthz()
+                        .list()
+
+                    if (recentMessages) {
+                        contextBuilder.append("最近对话:\\n")
+                        recentMessages.each { msg ->
+                            contextBuilder.append("用户: ").append(msg.message ?: '').append("\\n")
+                            contextBuilder.append("助手: ").append(msg.aiResponse ?: '').append("\\n")
+                        }
+                    }
+                } catch (Exception e) {
+                    ec.logger.warn("Failed to get recent messages: ${e.message}")
+                }
+
+                context = contextBuilder.toString()
+            ]]></script>
+        </actions>
+    </service>
+
+    <!-- 保存对话记录 -->
+    <service verb="saveMarketplaceDialog" noun="Internal" authenticate="false" type="inline">
+        <in-parameters>
+            <parameter name="sessionId" required="true"/>
+            <parameter name="message" required="true"/>
+            <parameter name="aiResponse" required="true"/>
+            <parameter name="intent" required="true"/>
+            <parameter name="merchantId" required="true"/>
+        </in-parameters>
+        <actions>
+            <script><![CDATA[
+                try {
+                    // 保存到MCP对话历史表
+                    ec.service.sync().name("mcp.dialog.create#DialogMessage").parameters([
+                        sessionId: sessionId,
+                        message: message,
+                        aiResponse: aiResponse,
+                        intent: intent,
+                        module: "marketplace",
+                        userId: merchantId
+                    ]).call()
+                } catch (Exception e) {
+                    ec.logger.warn("Failed to save marketplace dialog: ${e.message}")
+                }
+            ]]></script>
+        </actions>
+    </service>
+
+</services>

@@ -1,16 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
-        default-menu-title="智能推荐" default-menu-index="1"
+        default-menu-title="供需匹配" default-menu-index="1"
         include-child-content="false" require-authentication="false"
-        menu-image="fa fa-chart-line" menu-image-type="icon">
+        menu-image="fa fa-handshake" menu-image-type="icon">
 
     <subscreens default-item="Dashboard">
-        <!-- 核心功能：控制台 -->
-        <subscreens-item name="Dashboard" menu-title="控制台"
+        <!-- 核心功能：供需匹配控制台 -->
+        <subscreens-item name="Dashboard" menu-title="匹配控制台" menu-image="fa fa-tachometer-alt"
                          location="component://moqui-marketplace/screen/marketplace/Dashboard.xml"/>
 
-        <!-- 电商模块专用面板 -->
+        <!-- 核心功能：供应管理 -->
+        <subscreens-item name="Supply" menu-title="供应管理" menu-image="fa fa-warehouse"
+                         location="component://moqui-marketplace/screen/marketplace/Supply.xml"/>
+
+        <!-- 核心功能：需求管理 -->
+        <subscreens-item name="Demand" menu-title="需求管理" menu-image="fa fa-shopping-cart"
+                         location="component://moqui-marketplace/screen/marketplace/Demand.xml"/>
+
+        <!-- 核心功能：智能匹配 -->
+        <subscreens-item name="Matching" menu-title="智能匹配" menu-image="fa fa-sync-alt"
+                         location="component://moqui-marketplace/screen/marketplace/Matching.xml"/>
+
+        <!-- 扩展功能：电商模块（可选） -->
         <subscreens-item name="Ecommerce" menu-title="电商控制台" menu-include="false"
                          location="component://moqui-marketplace/screen/marketplace/Ecommerce.xml"/>
 
@@ -21,12 +33,6 @@
         <!-- 隐藏的遗留页面 (保留但不显示) -->
         <subscreens-item name="InfoManagement" menu-include="false"
                          location="component://moqui-marketplace/screen/marketplace/InfoManagement.xml"/>
-        <subscreens-item name="Supply" menu-include="false"
-                         location="component://moqui-marketplace/screen/marketplace/Supply.xml"/>
-        <subscreens-item name="Demand" menu-include="false"
-                         location="component://moqui-marketplace/screen/marketplace/Demand.xml"/>
-        <subscreens-item name="Matching" menu-include="false"
-                         location="component://moqui-marketplace/screen/marketplace/Matching.xml"/>
         <subscreens-item name="Chat" menu-include="false"
                          location="component://moqui-marketplace/screen/marketplace/Chat.xml"/>
         <subscreens-item name="TelegramAdmin" menu-include="false"
@@ -35,11 +41,51 @@
                          location="component://moqui-marketplace/screen/marketplace/TestDataInit.xml"/>
     </subscreens>
 
+    <transition name="menuData" read-only="true" begin-transaction="false">
+        <actions><script><![CDATA[
+            // 获取供需匹配平台的二级菜单数据
+            List menuDataList = []
+
+            // 核心供需匹配功能菜单
+            menuDataList.add([
+                title: "匹配控制台",
+                url: "/qapps/marketplace/Dashboard",
+                image: "fa fa-tachometer-alt",
+                imageType: "icon"
+            ])
+
+            menuDataList.add([
+                title: "供应管理",
+                url: "/qapps/marketplace/Supply",
+                image: "fa fa-warehouse",
+                imageType: "icon"
+            ])
+
+            menuDataList.add([
+                title: "需求管理",
+                url: "/qapps/marketplace/Demand",
+                image: "fa fa-shopping-cart",
+                imageType: "icon"
+            ])
+
+            menuDataList.add([
+                title: "智能匹配",
+                url: "/qapps/marketplace/Matching",
+                image: "fa fa-sync-alt",
+                imageType: "icon"
+            ])
+
+            ec.web.sendJsonResponse(menuDataList)
+        ]]></script></actions>
+        <default-response type="none" save-parameters="true"/>
+    </transition>
+
     <widgets>
         <container style="margin-bottom:16px;">
-            <link url="Dashboard" text="控制台" btn-type="primary" btn-size="sm"/>
-            <link url="Ecommerce" text="电商控制台" btn-type="default" btn-size="sm" style="margin-left:8px;"/>
-            <link url="SystemConfig" text="系统配置" btn-type="default" btn-size="sm" style="margin-left:8px;"/>
+            <link url="Dashboard" text="匹配控制台" btn-type="primary" btn-size="sm"/>
+            <link url="Supply" text="供应管理" btn-type="default" btn-size="sm" style="margin-left:8px;"/>
+            <link url="Demand" text="需求管理" btn-type="default" btn-size="sm" style="margin-left:8px;"/>
+            <link url="Matching" text="智能匹配" btn-type="success" btn-size="sm" style="margin-left:8px;"/>
         </container>
         <subscreens-active/>
     </widgets>

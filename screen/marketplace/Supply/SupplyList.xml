@@ -48,7 +48,7 @@
     <widgets>
         <container-row>
             <row-col lg="12">
-                <label text="供应列表" type="h2"/>
+                <label text="📦 供应列表" type="h5" style="q-mb-md"/>
 
                 <container-row>
                     <row-col lg="10">

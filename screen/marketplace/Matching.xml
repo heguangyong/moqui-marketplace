@@ -121,7 +121,7 @@
 
     <widgets>
         <container>
-            <label text="智能匹配控制台" type="h2"/>
+            <label text="🤖 智能匹配控制台" type="h5" style="q-mb-md"/>
             <label text="当前视角：${displayMerchantName}" type="p"/>
         </container>
 
